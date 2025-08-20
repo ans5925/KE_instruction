@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ATC Drill (PWA v3)</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111111">
+<style>
+  :root{--gap:12px}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:16px;line-height:1.35;background:#f7f7f9}
+  h1{font-size:18px;margin:0 0 8px}
+  .card{background:#fff;border:1px solid #e6e6ea;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  .row{display:flex;gap:var(--gap);flex-wrap:wrap;align-items:center}
+  .col{display:flex;flex-direction:column;gap:6px}
+  .label{font-size:13px;color:#666;display:flex;align-items:center;gap:6px}
+  .hint{font-size:12px;color:#999;border:1px solid #ddd;border-radius:6px;padding:1px 6px}
+  .digit-grid{display:flex;gap:8px}
+  .digit{width:54px;height:58px;border:1px solid #d7d7de;border-radius:12px;font-size:24px;text-align:center;background:#fff;cursor:pointer}
+  .focus-ring{outline:2px solid #3182f6;border-color:#3182f6}
+  .note{font-size:12px;color:#777}
+  button{padding:12px 14px;border:1px solid #d0d0d8;border-radius:12px;background:#fff;cursor:pointer}
+  button:active{transform:scale(0.98)}
+  .primary{background:#111;color:#fff;border-color:#111}
+  .danger{background:#ff3b30;color:#fff;border-color:#ff3b30}
+  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+  .muted{color:#666}
+  .grid{display:grid;grid-template-columns:1fr;gap:var(--gap)}
+  @media (min-width:920px){ .grid{grid-template-columns:1fr 1fr} }
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #ddd;border-radius:999px;font-size:12px;color:#555}
+  .tx{color:#fff;background:#ff3b30;border-color:#ff3b30}
+  .sheet-backdrop{position:fixed;inset:0;background:transparent;display:none;z-index:1000}
+  .sheet{position:fixed;left:50%;transform:translate(-50%,110%);bottom:10px;background:#fff;border-radius:14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.18);padding:8px 10px 10px;z-index:1001;transition:transform .18s ease;width:min(92vw,340px)}
+  .sheet.show{transform:translate(-50%,0)}
+  .sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .kp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .kp-btn{padding:12px 0;border-radius:10px;border:1px solid #d7d7de;background:#fff;font-size:20px}
+  .kp-func{font-size:14px}
+  .kp-target{font-weight:600}
+  .blur-wrap{position:relative;cursor:pointer}
+  .blurred{filter:blur(6px);user-select:none}
+  .blur-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#333;background:rgba(255,255,255,.6);border-radius:10px;font-size:13px}
+  .hidden{display:none}
+  #logList{max-height:240px;overflow:auto;margin-top:8px}
+  #logList .log-item{border-top:1px dashed #e5e5e9;padding:8px 0}
+  .control{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  select, input[type="range"]{padding:6px;border:1px solid #d0d0d8;border-radius:10px}
+  .approach {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .approach .speed {font-size:20px;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="row" style="justify-content:space-between;gap:12px">
+      <div>
+        <h1>ATC Drill (PWA v3)</h1>
+        <div class="muted">H/A/S 이동 · N(Next)/B(Say again)/I(Init)/R(Reinit) · <b>Space</b>=Instruction 토글</div>
+      </div>
+      <div class="control">
+        <label class="label">Voice
+          <select id="voiceSel"></select>
+        </label>
+        <label class="label">Rate
+          <input type="range" id="rate" min="0.6" max="1.5" step="0.01" value="0.9">
+        </label>
+        <label class="label">Pitch
+          <input type="range" id="pitch" min="0.6" max="1.4" step="0.01" value="0.9">
+        </label>
+        <span id="txLamp" class="pill hidden tx">TX</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div class="col" style="flex:1">
+          <span class="label">Difficulty</span>
+          <select id="difficulty" style="padding:10px;border:1px solid #ccc;border-radius:10px">
+            <option value="1">1 - Easy (±1000/2000ft, SPD 유지, 180° turn, 1000/1500FPM)</option>
+            <option value="2">2 - Normal (±1000/2000ft, SPD ±20kt, 180° turn, 1000/1500FPM)</option>
+            <option value="3" selected>3 - Hard (가변 규칙, 상승 1000/1500/2000)</option>
+          </select>
+        </div>
+      </div>
+      <hr style="margin:14px 0;border:none;border-top:1px solid #eee" />
+      <div class="row">
+        <div class="col" style="flex:1">
+          <span class="label">Heading <span class="hint">H</span></span>
+          <div class="digit-grid" id="headingBlock">
+            <input class="digit" id="h1" readonly maxlength="1" />
+            <input class="digit" id="h2" readonly maxlength="1" />
+            <input class="digit" id="h3" readonly maxlength="1" />
+          </div>
+          <div class="note mono" id="hdgPreview">HDG: 000°</div>
+        </div>
+        <div class="col" style="flex:1">
+          <span class="label">Altitude (XX00) <span class="hint">A</span></span>
+          <div class="digit-grid" id="altBlock">
+            <input class="digit" id="a1" readonly maxlength="1" />
+            <input class="digit" id="a2" readonly maxlength="1" />
+            <div style="display:flex;align-items:center;font-weight:600">00 ft</div>
+          </div>
+          <div class="note mono" id="altPreview">ALT: —</div>
+        </div>
+        <div class="col" style="flex:1">
+          <span class="label">Speed (XX0) <span class="hint">S</span></span>
+          <div class="digit-grid" id="speedBlock">
+            <input class="digit" id="s1" readonly maxlength="1" />
+            <input class="digit" id="s2" readonly maxlength="1" />
+            <div style="display:flex;align-items:center;font-weight:600">0 kt</div>
+          </div>
+          <div class="note mono" id="spdPreview">SPD: —</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;flex-wrap:wrap;gap:10px">
+        <button id="btnInit" class="primary">Initialize <span class="hint">I</span></button>
+        <button id="btnReinit" class="danger">Reinitialize <span class="hint">R</span></button>
+        <span id="initMsg" class="note"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="flex-wrap:wrap;gap:10px">
+        <button id="sayAgain">Say Again <span class="hint">B</span></button>
+        <button id="next" class="primary">Next Instruction <span class="hint">N</span></button>
+      </div>
+      <div class="card blur-wrap" style="margin-top:14px">
+        <div class="label">Instruction (현재) <span class="hint">Space</span></div>
+        <div id="textOut" class="mono blurred" style="white-space:pre-wrap;font-size:15px"></div>
+        <div id="blurHint" class="blur-hint">터치 또는 Space로 보기</div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="label">Approach Speed Generator</div>
+        <div class="approach" style="margin-top:8px">
+          <div class="col">
+            <span class="label">Min (kt)</span>
+            <div class="digit-grid" id="apprMinBlock">
+              <input class="digit" id="pmin1" readonly maxlength="1" />
+              <input class="digit" id="pmin2" readonly maxlength="1" />
+              <input class="digit" id="pmin3" readonly maxlength="1" />
+            </div>
+          </div>
+          <div class="col">
+            <span class="label">Max (kt)</span>
+            <div class="digit-grid" id="apprMaxBlock">
+              <input class="digit" id="pmax1" readonly maxlength="1" />
+              <input class="digit" id="pmax2" readonly maxlength="1" />
+              <input class="digit" id="pmax3" readonly maxlength="1" />
+            </div>
+          </div>
+          <div class="col" style="justify-content:flex-end">
+            <button id="btnApproach" class="primary">Generate</button>
+            <div class="note mono" id="apprRangeNote">범위: 145–152 kt</div>
+          </div>
+          <div class="col" style="flex:1;align-items:flex-start;justify-content:flex-end">
+            <span id="apprVal" class="speed mono">—</span>
+          </div>
+        </div>
+        <div class="note">* 이 범위는 위 툴과 독립적입니다. 입력은 팝업 키패드로만 가능합니다.</div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="label">Instruction Log</div>
+        <div id="logList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="backdrop" class="sheet-backdrop"></div>
+  <div id="sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-head">
+      <div>입력: <span class="kp-target" id="kpTarget">—</span></div>
+      <button id="kpClose" class="kp-btn kp-func">닫기</button>
+    </div>
+    <div class="kp-grid" style="margin-bottom:8px">
+      <button class="kp-btn">1</button><button class="kp-btn">2</button><button class="kp-btn">3</button>
+      <button class="kp-btn">4</button><button class="kp-btn">5</button><button class="kp-btn">6</button>
+      <button class="kp-btn">7</button><button class="kp-btn">8</button><button class="kp-btn">9</button>
+      <button class="kp-btn kp-func" data-func="clear">C</button>
+      <button class="kp-btn">0</button>
+      <button class="kp-btn kp-func" data-func="back">⌫</button>
+    </div>
+  </div>
+
+<script>
+/* ====== Voice dropdown with Samantha default ====== */
+const voiceSel = document.getElementById('voiceSel');
+const rateEl = document.getElementById('rate');
+const pitchEl = document.getElementById('pitch');
+const txLamp = document.getElementById('txLamp');
+
+function loadVoices(){
+  const vs = window.speechSynthesis.getVoices();
+  const prev = voiceSel.value;
+  voiceSel.innerHTML = '';
+  vs.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = `${v.name} (${v.lang})`;
+    voiceSel.appendChild(opt);
+  });
+  if (prev && Array.from(voiceSel.options).some(o => o.value === prev)) {
+    voiceSel.value = prev;
+    return;
+  }
+  const samantha = Array.from(voiceSel.options).find(o => /Samantha/.test(o.value));
+  if (samantha) { voiceSel.value = samantha.value; return; }
+  const enUS = Array.from(voiceSel.options).find(o => /(en-US)/.test(o.textContent));
+  if (enUS) { voiceSel.value = enUS.value; return; }
+  const engAny = Array.from(voiceSel.options).find(o => /(en-/.test(o.textContent));
+  if (engAny) { voiceSel.value = engAny.value; return; }
+  if (voiceSel.options.length) voiceSel.selectedIndex = 0;
+}
+if ('speechSynthesis' in window){
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const voices = window.speechSynthesis.getVoices();
+
+  let chosen = voices.find(v => v.name === (voiceSel?.value || ''));
+  if (!chosen) chosen = voices.find(v => v.name.includes('Samantha'));
+  if (!chosen) chosen = voices.find(v => v.lang === 'en-US');
+  if (!chosen) chosen = voices.find(v => v.lang?.toLowerCase().startsWith('en'));
+  if (!chosen && voices.length) chosen = voices[0];
+
+  if (chosen) { u.voice = chosen; u.lang = chosen.lang || 'en-US'; }
+  else { u.lang = 'en-US'; }
+
+  u.rate = parseFloat(rateEl?.value || '0.9');
+  u.pitch = parseFloat(pitchEl?.value || '0.9');
+  u.onstart = () => txLamp.classList.remove('hidden');
+  u.onend   = () => txLamp.classList.add('hidden');
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
+/* ====== App core ====== */
+const MIN_ALT=3000,MAX_ALT=7500,SPD_MIN=160,SPD_MAX=210;
+const el=id=>document.getElementById(id);
+const h1=el('h1'),h2=el('h2'),h3=el('h3'),a1=el('a1'),a2=el('a2'),s1=el('s1'),s2=el('s2');
+const hdgPreview=el('hdgPreview'), altPreview=el('altPreview'), spdPreview=el('spdPreview');
+const textOut=el('textOut'), blurHint=el('blurHint'), difficultySel=el('difficulty');
+const sayAgainBtn=el('sayAgain'), nextBtn=el('next'), initBtn=el('btnInit'), reinitBtn=el('btnReinit');
+const logList=el('logList'); const headingBlock=el('headingBlock'), altBlock=el('altBlock'), speedBlock=el('speedBlock');
+const backdrop=el('backdrop'), sheet=el('sheet'), kpTarget=el('kpTarget'), kpClose=el('kpClose');
+// Approach UI
+const apprMinBlock = document.getElementById('apprMinBlock');
+const apprMaxBlock = document.getElementById('apprMaxBlock');
+const pmin1=el('pmin1'),pmin2=el('pmin2'),pmin3=el('pmin3');
+const pmax1=el('pmax1'),pmax2=el('pmax2'),pmax3=el('pmax3');
+const btnApproach=el('btnApproach'), apprVal=el('apprVal'), apprRangeNote=el('apprRangeNote');
+
+let state={difficulty:3,cur_hdg:0,cur_alt=3000,cur_spd=160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
+
+function clampAlt(a){return Math.max(MIN_ALT,Math.min(MAX_ALT,Math.trunc(a)));}
+function clampSpd(s){return Math.max(SPD_MIN,Math.min(SPD_MAX,Math.trunc(s)));}
+function hdgSpdInAviation(n){n=Math.max(0,Math.min(999,Math.trunc(n)));const s=n.toString().padStart(3,'0');const AVI=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];return s.split('').map(ch=>AVI[parseInt(ch,10)]);}
+function altFpmInAviation(v){v=Math.max(0,Math.trunc(v));const AVI=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];const t=Math.floor(v/1000),h=Math.floor((v%1000)/100);const p=[];if(t)p.push(`${AVI[t]} Thousand`);if(h)p.push(`${AVI[h]} Hundred`);if(!p.length)p.push(`${AVI[0]} Hundred`);return p.join(' ');}
+function instructionForTTS(t,hdg,cd,alt,spd,fpm){const ha=hdgSpdInAviation(hdg),sa=hdgSpdInAviation(spd);return `Korean air one two three tango, Turn ${t===1?'Left':'Right'} heading ${ha[0]}${ha[1]}${ha[2]}, ${cd===0?'Descend and maintain ':'Climb and Maintain '}${altFpmInAviation(alt)}, Speed ${sa[0]}${sa[1]}${sa[2]}, Rate ${altFpmInAviation(fpm)}`;}
+function textInstruction(t,hdg,cd,alt,spd,fpm){return `Korean air one two three tango, Turn ${t===1?'Left':'Right'} heading ${String(hdg).padStart(3,'0')}, ${cd===0?'Descend and maintain ':'Climb and Maintain '}${alt} Speed ${spd} Rate ${fpm}`;}
+
+function digitsToInt(...ds){let s=ds.map(x=>(x.value||'0').replace(/\D/g,'').slice(0,1)).join('');return parseInt(s||'0',10);}
+function updatePreviews(){
+  const hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10;
+  hdgPreview.textContent=`HDG: ${String(hdg).padStart(3,'0')}°`;
+  altPreview.textContent=`ALT: ${alt} ft`; spdPreview.textContent=`SPD: ${spd} kt`;
+}
+function addFocusRing(elm){[...state.order,pmin1,pmin2,pmin3,pmax1,pmax2,pmax3].forEach(e=>e&&e.classList.remove('focus-ring')); if(elm) elm.classList.add('focus-ring');}
+function openKeypad(inputEl){state.activeInput=inputEl; kpTarget.textContent=inputEl.id.toUpperCase(); backdrop.style.display='block'; sheet.classList.add('show'); addFocusRing(inputEl);}
+function closeKeypad(){sheet.classList.remove('show'); backdrop.style.display='none'; state.activeInput=null; addFocusRing(null);}
+function focusSection(section){let target=section==='H'?h1:section==='A'?a1:s1; openKeypad(target); state.editSeq=true;}
+
+document.getElementById('headingBlock').addEventListener('click',()=>focusSection('H'));
+document.getElementById('altBlock').addEventListener('click',()=>focusSection('A'));
+document.getElementById('speedBlock').addEventListener('click',()=>focusSection('S'));
+apprMinBlock.addEventListener('click', (e)=>{
+  const t=e.target.closest('.digit')||pmin1;
+  openKeypad(t); state.editSeq=false; // one-shot input
+});
+apprMaxBlock.addEventListener('click', (e)=>{
+  const t=e.target.closest('.digit')||pmax1;
+  openKeypad(t); state.editSeq=false;
+});
+
+sheet.addEventListener('click',(e)=>{
+  const btn=e.target.closest('.kp-btn'); if(!btn||!state.activeInput) return;
+  const func=btn.dataset.func;
+  if(func==='clear'){state.activeInput.value='';updatePreviews();updateApprNote();return;}
+  if(func==='back'){state.activeInput.value='';updatePreviews();updateApprNote(); if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx>0){openKeypad(state.order[idx-1]);}} else closeKeypad(); return;}
+  const num=e.target.textContent.trim();
+  if(/^\d$/.test(num)){
+    state.activeInput.value=num; updatePreviews(); updateApprNote();
+    if(state.editSeq){
+      const idx=state.order.indexOf(state.activeInput);
+      if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}
+    } else { // approach fields: close after single digit
+      closeKeypad();
+    }
+  }
+});
+backdrop.addEventListener('click',()=>{state.editSeq=false; closeKeypad();});
+kpClose.addEventListener('click',()=>{state.editSeq=false; closeKeypad();});
+
+document.addEventListener('keydown',(e)=>{
+  const k=e.key;
+  if(k==='n'||k==='N'){e.preventDefault();emitInstruction();return;}
+  if(k==='b'||k==='B'){e.preventDefault();if(state.lastTTS) speak(state.lastTTS);return;}
+  if(k==='i'||k==='I'){e.preventDefault();doInitialize();return;}
+  if(k==='r'||k==='R'){e.preventDefault();doReinitialize();return;}
+  if(k==='h'||k==='H'){e.preventDefault();focusSection('H');return;}
+  if(k==='a'||k==='A'){e.preventDefault();focusSection('A');return;}
+  if(k==='s'||k==='S'){e.preventDefault();focusSection('S');return;}
+  if(e.code==='Space'){
+    e.preventDefault();
+    const isBlur=textOut.classList.contains('blurred');
+    if(isBlur){ textOut.classList.remove('blurred'); blurHint.classList.add('hidden'); }
+    else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
+    return;
+  }
+  // prevent keyboard entry for approach fields: ignore numeric/backspace when target is approach
+  const apprSet = new Set([pmin1,pmin2,pmin3,pmax1,pmax2,pmax3]);
+  if(state.activeInput && apprSet.has(state.activeInput)){
+    e.stopPropagation();
+    return; // no keyboard input for approach fields
+  }
+  if(state.activeInput && /^[0-9]$/.test(k)){e.preventDefault();state.activeInput.value=k;updatePreviews();
+    if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}} else { closeKeypad(); }}
+  if(state.activeInput && k==='Backspace'){e.preventDefault();state.activeInput.value='';updatePreviews();}
+});
+
+function readInputsToState(){
+  const hdg=digitsToInt(h1,h2,h3)%360, alt=clampAlt(digitsToInt(a1,a2)*100), spd=clampSpd(digitsToInt(s1,s2)*10);
+  state.cur_hdg=hdg; state.cur_alt=alt; state.cur_spd=spd; state.difficulty=parseInt(difficultySel.value,10);
+  document.getElementById('initMsg').textContent='초기화 완료';
+}
+function doInitialize(){
+  readInputsToState();
+  textOut.textContent='Initialized. Next Instruction을 누르세요.';
+  textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
+}
+function doReinitialize(){
+  doInitialize();
+  textOut.textContent='Reinitialized. Next Instruction을 누르세요.';
+}
+
+/* ====== Approach Speed generator with adjustable range ====== */
+function readApprMin(){return digitsToInt(pmin1,pmin2,pmin3)||145;}
+function readApprMax(){return digitsToInt(pmax1,pmax2,pmax3)||152;}
+function updateApprNote(){
+  const mn = readApprMin(), mx = readApprMax();
+  const lo = Math.min(mn,mx), hi=Math.max(mn,mx);
+  apprRangeNote.textContent = `범위: ${lo}–${hi} kt`;
+}
+function genApproach(){
+  let mn = readApprMin(), mx = readApprMax();
+  if (mn>mx){ const t=mn; mn=mx; mx=t; }
+  const v = Math.floor(Math.random()*(mx-mn+1))+mn;
+  apprVal.textContent = `${v} kt`;
+}
+btnApproach.addEventListener('click', genApproach);
+
+/* ====== Difficulty-based instruction generator ====== */
+function getInstruction(difficulty,cur_hdg,cur_alt,cur_spd){
+  let turnd = Math.floor(Math.random()*2)+1; // 1 Left / 2 Right
+  let target_hdg = cur_hdg;
+  let climb_descend = Math.floor(Math.random()*2); // 0 down / 1 up
+  let target_alt = cur_alt;
+  let target_spd = cur_spd;
+  let target_fpm = 1000;
+
+  if (cur_alt <= MIN_ALT) climb_descend = 1;
+  if (cur_alt >= MAX_ALT) climb_descend = 0;
+
+  if (difficulty === 1){ // Easy
+    target_hdg = (cur_hdg + 180) % 360;
+    const altStep = Math.random() < 0.5 ? 1000 : 2000;
+    target_alt = clampAlt(cur_alt + (climb_descend? +altStep : -altStep));
+    target_spd = cur_spd;
+    target_fpm = Math.random() < 0.5 ? 1000 : 1500;
+  } else if (difficulty === 2){ // Normal
+    target_hdg = (cur_hdg + 180) % 360;
+    const altStep = Math.random() < 0.5 ? 1000 : 2000;
+    target_alt = clampAlt(cur_alt + (climb_descend? +altStep : -altStep));
+    const spdDelta = Math.random() < 0.5 ? -20 : +20;
+    target_spd = clampSpd(cur_spd + spdDelta);
+    target_fpm = Math.random() < 0.5 ? 1000 : 1500;
+  } else { // Hard
+    let delta5=(Math.floor(Math.random()*27)+10)*5;
+    target_hdg = cur_hdg + (turnd===1? -delta5 : +delta5);
+    target_hdg = ((target_hdg%360)+360)%360;
+    const climbSteps = [1000,1500,2000];
+    const descendSteps = [1500,2000];
+    let altStep = (climb_descend ? climbSteps[Math.floor(Math.random()*climbSteps.length)]
+                                 : descendSteps[Math.floor(Math.random()*descendSteps.length)]);
+    target_alt = clampAlt(cur_alt + (climb_descend? +altStep : -altStep));
+    target_spd = clampSpd(cur_spd + ((Math.floor(Math.random()*3)-1)*20)); // -20/0/+20
+    target_fpm=(Math.floor(Math.random()*13)+9)*100;
+    target_hdg = target_hdg - (target_hdg%10);
+  }
+  return [turnd,target_hdg,climb_descend,target_alt,target_spd,target_fpm];
+}
+
+function emitInstruction(){
+  if(state.lastText){
+    const item=document.createElement('div'); item.className='log-item mono'; item.textContent=state.lastText; logList.prepend(item);
+  }
+  let [turnd,target_hdg,climbdescend,target_alt,target_spd,target_fpm]=getInstruction(state.difficulty,state.cur_hdg,state.cur_alt,state.cur_spd);
+  target_hdg=((target_hdg%360)+360)%360;
+
+  const text=`Korean air one two three tango, Turn ${turnd===1?'Left':'Right'} heading ${String(target_hdg).padStart(3,'0')}, ${climbdescend===0?'Descend and maintain ':'Climb and Maintain '}${target_alt} Speed ${target_spd} Rate ${target_fpm}`;
+  const ha=hdgSpdInAviation(target_hdg), sa=hdgSpdInAviation(target_spd);
+  const tts=`Korean air one two three tango, Turn ${turnd===1?'Left':'Right'} heading ${ha[0]}${ha[1]}${ha[2]}, ${climbdescend===0?'Descend and maintain ':'Climb and Maintain '}${altFpmInAviation(target_alt)}, Speed ${sa[0]}${sa[1]}${sa[2]}, Rate ${altFpmInAviation(target_fpm)}`;
+
+  state.lastText=text; state.lastTTS=tts;
+  state.cur_hdg=target_hdg; state.cur_alt=target_alt; state.cur_spd=target_spd;
+
+  textOut.textContent=text; textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
+  speak(tts);
+}
+
+function setDefaultInputs(hdg=190,alt=4000,spd=210){
+  const h=String(hdg).padStart(3,'0'); h1.value=h[0]; h2.value=h[1]; h3.value=h[2];
+  const a=String(Math.round(alt/100)).padStart(2,'0'); a1.value=a[0]; a2.value=a[1];
+  const s=String(Math.round(spd/10)).padStart(2,'0'); s1.value=s[0]; s2.value=s[1];
+  updatePreviews();
+}
+function setDefaultApproach(minv=145,maxv=152){
+  const mn=String(minv).padStart(3,'0'); pmin1.value=mn[0]; pmin2.value=mn[1]; pmin3.value=mn[2];
+  const mx=String(maxv).padStart(3,'0'); pmax1.value=mx[0]; pmax2.value=mx[1]; pmax3.value=mx[2];
+  updateApprNote();
+}
+function digitsToInt(...ds){let s=ds.map(x=>(x.value||'0').replace(/\D/g,'').slice(0,1)).join('');return parseInt(s||'0',10);}
+function updatePreviews(){
+  const hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10;
+  hdgPreview.textContent=`HDG: ${String(hdg).padStart(3,'0')}°`;
+  altPreview.textContent=`ALT: ${alt} ft`; spdPreview.textContent=`SPD: ${spd} kt`;
+}
+
+setDefaultInputs();
+setDefaultApproach(145,152);
+textOut.textContent='숫자를 입력한 뒤 Initialize(I/R) 또는 Next(N)를 사용하세요. Approach 범위는 카드에서 팝업 키패드로 조정.';
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./service-worker.js');
+  });
+}
+</script>
+</body>
+</html>
