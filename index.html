@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>ATC Drill (PWA v3)</title>
+<title>Instructions</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -315,9 +315,7 @@ sheet.addEventListener('click',(e)=>{
     if(state.editSeq){
       const idx=state.order.indexOf(state.activeInput);
       if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}
-    } else { // approach fields: close after single digit
-      closeKeypad();
-    }
+    } else { closeKeypad(); }
   }
 });
 backdrop.addEventListener('click',()=>{state.editSeq=false; closeKeypad();});
@@ -341,10 +339,7 @@ document.addEventListener('keydown',(e)=>{
   }
   // prevent keyboard entry for approach fields
   const apprSet = new Set([pmin1,pmin2,pmin3,pmax1,pmax2,pmax3]);
-  if(state.activeInput && apprSet.has(state.activeInput)){
-    e.stopPropagation();
-    return; // no keyboard input for approach fields
-  }
+  if(state.activeInput && apprSet.has(state.activeInput)){ e.stopPropagation(); return; }
   if(state.activeInput && /^[0-9]$/.test(k)){e.preventDefault();state.activeInput.value=k;updatePreviews();
     if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}} else { closeKeypad(); }}
   if(state.activeInput && k==='Backspace'){e.preventDefault();state.activeInput.value='';updatePreviews();}
@@ -365,7 +360,7 @@ function doReinitialize(){
   textOut.textContent='Reinitialized. Next Instruction을 누르세요.';
 }
 
-/* ====== Approach Speed generator with adjustable range ====== */
+/* ====== Approach Speed generator ====== */
 function readApprMin(){return digitsToInt(pmin1,pmin2,pmin3)||145;}
 function readApprMax(){return digitsToInt(pmax1,pmax2,pmax3)||152;}
 function updateApprNote(){
@@ -381,7 +376,7 @@ function genApproach(){
 }
 btnApproach.addEventListener('click', genApproach);
 
-/* ====== Difficulty-based instruction generator ====== */
+/* ====== Instruction generator ====== */
 function getInstruction(difficulty,cur_hdg,cur_alt,cur_spd){
   let turnd = Math.floor(Math.random()*2)+1; // 1 Left / 2 Right
   let target_hdg = cur_hdg;
