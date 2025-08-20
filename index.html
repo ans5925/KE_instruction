@@ -3,14 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>ATC Drill (PWA)</title>
+<title>ATC Drill (Chrome TTS)</title>
 <link rel="manifest" href="manifest.webmanifest">
-  <script>
-  navigator.serviceWorker.register('./service-worker.js');
-</script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#111111">
 <style>
   :root{--gap:12px}
@@ -33,11 +29,11 @@
   .good{color:#0a7d28}
   .warn{color:#b00020}
   .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
-  .sticky{position:sticky;bottom:0}
   .muted{color:#666}
   .grid{display:grid;grid-template-columns:1fr;gap:var(--gap)}
-  @media (min-width:720px){ .grid{grid-template-columns:1fr 1fr} }
-  /* Compact keypad */
+  @media (min-width:820px){ .grid{grid-template-columns:1fr 1fr} }
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #ddd;border-radius:999px;font-size:12px;color:#555}
+  .tx{color:#fff;background:#ff3b30;border-color:#ff3b30}
   .sheet-backdrop{position:fixed;inset:0;background:transparent;display:none;z-index:1000}
   .sheet{position:fixed;left:50%;transform:translate(-50%,110%);bottom:10px;background:#fff;border-radius:14px;
     box-shadow:0 6px 20px rgba(0,0,0,.18);padding:8px 10px 10px;z-index:1001;transition:transform .18s ease;width:min(92vw,340px)}
@@ -47,79 +43,96 @@
   .kp-btn{padding:12px 0;border-radius:10px;border:1px solid #d7d7de;background:#fff;font-size:20px}
   .kp-func{font-size:14px}
   .kp-target{font-weight:600}
-  /* Instruction blur & log */
   .blur-wrap{position:relative;cursor:pointer}
   .blurred{filter:blur(6px);user-select:none}
   .blur-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#333;background:rgba(255,255,255,.6);border-radius:10px;font-size:13px}
   .hidden{display:none}
-  #logList{max-height:220px;overflow:auto;margin-top:8px}
+  #logList{max-height:240px;overflow:auto;margin-top:8px}
   #logList .log-item{border-top:1px dashed #e5e5e9;padding:8px 0}
+  .control{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  select, input[type="range"]{padding:6px;border:1px solid #d0d0d8;border-radius:10px}
 </style>
 </head>
 <body>
   <div class="card">
-    <h1>ATC Drill (PWA)</h1>
-    <div class="muted">ALT ±1500/±2000ft · SPD 160–210kt · H/A/S로 섹션 이동 · N/B/I 단축키</div>
+    <div class="row" style="justify-content:space-between;gap:12px">
+      <div>
+        <h1>ATC Drill (Chrome 내장 TTS 전용)</h1>
+        <div class="muted">H/A/S 이동 · N/B/I 단축키 · <b>Space</b>=Instruction 토글</div>
+      </div>
+      <div class="control">
+        <label class="label">Voice
+          <select id="voiceSel"></select>
+        </label>
+        <label class="label">Rate
+          <input type="range" id="rate" min="0.8" max="1.5" step="0.01" value="1.18">
+        </label>
+        <label class="label">Pitch
+          <input type="range" id="pitch" min="0.6" max="1.4" step="0.01" value="0.92">
+        </label>
+        <span id="txLamp" class="pill hidden tx">TX</span>
+      </div>
+    </div>
   </div>
+
   <div class="grid">
     <div class="card">
       <div class="row" style="justify-content:space-between;">
         <div class="col" style="flex:1">
           <span class="label">Difficulty</span>
           <select id="difficulty" style="padding:10px;border:1px solid #ccc;border-radius:10px">
-            <option value="1">1 - Easy (ALT & FPM, ALT 1000 단위)</option>
-            <option value="2">2 - Medium (HDG & ALT & FPM, SPD 고정)</option>
-            <option value="3" selected>3 - Hard (HDG/ALT/SPD/FPM 모두)</option>
-            <option value="4">4 - Extreme (추가 규칙 예정)</option>
+            <option value="1">1 - Easy</option>
+            <option value="2">2 - Medium</option>
+            <option value="3" selected>3 - Hard</option>
           </select>
         </div>
       </div>
       <hr style="margin:14px 0;border:none;border-top:1px solid #eee" />
       <div class="row">
         <div class="col" style="flex:1">
-          <span class="label">Heading (세 자리) <span class="hint">H</span></span>
+          <span class="label">Heading <span class="hint">H</span></span>
           <div class="digit-grid" id="headingBlock">
-            <input class="digit" id="h1" inputmode="none" readonly maxlength="1" />
-            <input class="digit" id="h2" inputmode="none" readonly maxlength="1" />
-            <input class="digit" id="h3" inputmode="none" readonly maxlength="1" />
+            <input class="digit" id="h1" readonly maxlength="1" />
+            <input class="digit" id="h2" readonly maxlength="1" />
+            <input class="digit" id="h3" readonly maxlength="1" />
           </div>
           <div class="note mono" id="hdgPreview">HDG: 000°</div>
         </div>
         <div class="col" style="flex:1">
-          <span class="label">Altitude (XX00 ft → 3000~7500) <span class="hint">A</span></span>
+          <span class="label">Altitude (XX00) <span class="hint">A</span></span>
           <div class="digit-grid" id="altBlock">
-            <input class="digit" id="a1" inputmode="none" readonly maxlength="1" />
-            <input class="digit" id="a2" inputmode="none" readonly maxlength="1" />
+            <input class="digit" id="a1" readonly maxlength="1" />
+            <input class="digit" id="a2" readonly maxlength="1" />
             <div style="display:flex;align-items:center;font-weight:600">00 ft</div>
           </div>
           <div class="note mono" id="altPreview">ALT: —</div>
         </div>
         <div class="col" style="flex:1">
-          <span class="label">Speed (XX0 kt → 160~210) <span class="hint">S</span></span>
+          <span class="label">Speed (XX0) <span class="hint">S</span></span>
           <div class="digit-grid" id="speedBlock">
-            <input class="digit" id="s1" inputmode="none" readonly maxlength="1" />
-            <input class="digit" id="s2" inputmode="none" readonly maxlength="1" />
+            <input class="digit" id="s1" readonly maxlength="1" />
+            <input class="digit" id="s2" readonly maxlength="1" />
             <div style="display:flex;align-items:center;font-weight:600">0 kt</div>
           </div>
           <div class="note mono" id="spdPreview">SPD: —</div>
         </div>
       </div>
-      <div class="row" style="margin-top:12px;flex-wrap:wrap">
+      <div class="row" style="margin-top:12px;flex-wrap:wrap;gap:10px">
         <button id="btnInit" class="primary">Initialize <span class="hint">I</span></button>
         <button id="btnReinit" class="danger">Reinitialize</button>
         <span id="initMsg" class="note"></span>
       </div>
     </div>
+
     <div class="card">
-      <div class="row" style="flex-wrap:wrap">
+      <div class="row" style="flex-wrap:wrap;gap:10px">
         <button id="sayAgain">Say Again <span class="hint">B</span></button>
         <button id="next" class="primary">Next Instruction <span class="hint">N</span></button>
       </div>
-      <div class="note" style="margin-top:8px">Instruction 영역은 기본 흐림. 탭하면 표시/다시 흐림.</div>
       <div class="card blur-wrap" style="margin-top:14px">
-        <div class="label">Instruction (현재)</div>
+        <div class="label">Instruction (현재) <span class="hint">Space</span></div>
         <div id="textOut" class="mono blurred" style="white-space:pre-wrap;font-size:15px"></div>
-        <div id="blurHint" class="blur-hint">터치하여 보기</div>
+        <div id="blurHint" class="blur-hint">터치 또는 Space로 보기</div>
       </div>
       <div class="card" style="margin-top:14px">
         <div class="label">Instruction Log</div>
@@ -127,6 +140,7 @@
       </div>
     </div>
   </div>
+
   <div id="backdrop" class="sheet-backdrop"></div>
   <div id="sheet" class="sheet" aria-hidden="true">
     <div class="sheet-head">
@@ -142,16 +156,124 @@
       <button class="kp-btn kp-func" data-func="back">⌫</button>
     </div>
   </div>
+
 <script>
-const AVI_NUM=["Zero","One","Two","Tree","Four","Fife","Six","Seven","Eight","Niner"];
-const THOUSAND="Thousand",HUNDRED="Hundred";const MIN_ALT=3000,MAX_ALT=7500;const SPD_MIN=160,SPD_MAX=210;
+/* ====== Chrome built-in TTS ====== */
+const voiceSel = document.getElementById('voiceSel');
+const rateEl = document.getElementById('rate');
+const pitchEl = document.getElementById('pitch');
+const txLamp = document.getElementById('txLamp');
+
+function loadVoices(){
+  const vs = window.speechSynthesis.getVoices();
+  voiceSel.innerHTML = '';
+  vs.filter(v => /en/i.test(v.lang)).forEach(v => {
+    const o = document.createElement('option');
+    o.value = v.name; o.textContent = v.name + ' (' + v.lang + ')';
+    voiceSel.appendChild(o);
+  });
+  // Try pick a Google voice on Chrome
+  const prefer = Array.from(voiceSel.options).find(o => /Google US English|Google.*English|en-US|en-GB/i.test(o.textContent));
+  if (prefer) voiceSel.value = prefer.value;
+}
+if ('speechSynthesis' in window){
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const voices = window.speechSynthesis.getVoices();
+  const chosen = voices.find(v => v.name === voiceSel.value) || voices.find(v=>/en/i.test(v.lang));
+  if (chosen) u.voice = chosen;
+  u.lang = (chosen && chosen.lang) || 'en-US';
+  u.rate = parseFloat(rateEl.value || '1.0');
+  u.pitch = parseFloat(pitchEl.value || '1.0');
+  u.onstart = () => txLamp.classList.remove('hidden');
+  u.onend = () => txLamp.classList.add('hidden');
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
+/* ====== App core ====== */
+const MIN_ALT=3000,MAX_ALT=7500,SPD_MIN=160,SPD_MAX=210;
+const el=id=>document.getElementById(id);
+const h1=el('h1'),h2=el('h2'),h3=el('h3'),a1=el('a1'),a2=el('a2'),s1=el('s1'),s2=el('s2');
+const hdgPreview=el('hdgPreview'), altPreview=el('altPreview'), spdPreview=el('spdPreview');
+const textOut=el('textOut'), blurHint=el('blurHint'), difficultySel=el('difficulty');
+const sayAgainBtn=el('sayAgain'), nextBtn=el('next'), initBtn=el('btnInit'), reinitBtn=el('btnReinit');
+const logList=el('logList'); const headingBlock=el('headingBlock'), altBlock=el('altBlock'), speedBlock=el('speedBlock');
+const backdrop=el('backdrop'), sheet=el('sheet'), kpTarget=el('kpTarget'), kpClose=el('kpClose');
+
+let state={difficulty:3,cur_hdg:0,cur_alt:3000,cur_spd:160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
+
 function clampAlt(a){return Math.max(MIN_ALT,Math.min(MAX_ALT,Math.trunc(a)));}
 function clampSpd(s){return Math.max(SPD_MIN,Math.min(SPD_MAX,Math.trunc(s)));}
-function hdgSpdInAviation(n){n=Math.max(0,Math.min(999,Math.trunc(n)));const s=n.toString().padStart(3,"0");return s.split("").map(ch=>AVI_NUM[parseInt(ch,10)]);}
-function altFpmInAviation(v){v=Math.max(0,Math.trunc(v));const t=Math.floor(v/1000),h=Math.floor((v%1000)/100);const p=[];if(t)p.push(`${AVI_NUM[t]} ${THOUSAND}`);if(h)p.push(`${AVI_NUM[h]} ${HUNDRED}`);if(!p.length)p.push(`${AVI_NUM[0]} ${HUNDRED}`);return p.join(" ");}
-function textInstruction(t,hdg,cd,alt,spd,fpm){return `Korean air one two three tango, Turn ${t===1?"Left":"Right"} heading ${String(hdg).padStart(3,'0')}, ${cd===0?"Descend and maintain ":"Climb and Maintain "}${alt} Speed ${spd} Rate ${fpm}`;}
-function instructionForTTS(t,hdg,cd,alt,spd,fpm){const ha=hdgSpdInAviation(hdg),sa=hdgSpdInAviation(spd);return `Korean air one two three tango, Turn ${t===1?"Left":"Right"} heading ${ha[0]}${ha[1]}${ha[2]}, ${cd===0?"Descend and maintain ":"Climb and Maintain "}${altFpmInAviation(alt)}, Speed ${sa[0]}${sa[1]}${sa[2]}, Rate ${altFpmInAviation(fpm)}`;}
-function speak(text){if(!("speechSynthesis"in window))return;const u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=1.0;speechSynthesis.cancel();speechSynthesis.speak(u);}
+function hdgSpdInAviation(n){n=Math.max(0,Math.min(999,Math.trunc(n)));const s=n.toString().padStart(3,'0');const AVI=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];return s.split('').map(ch=>AVI[parseInt(ch,10)]);}
+function altFpmInAviation(v){v=Math.max(0,Math.trunc(v));const AVI=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];const t=Math.floor(v/1000),h=Math.floor((v%1000)/100);const p=[];if(t)p.push(`${AVI[t]} Thousand`);if(h)p.push(`${AVI[h]} Hundred`);if(!p.length)p.push(`${AVI[0]} Hundred`);return p.join(' ');}
+function instructionForTTS(t,hdg,cd,alt,spd,fpm){const ha=hdgSpdInAviation(hdg),sa=hdgSpdInAviation(spd);return `Korean air one two three tango, Turn ${t===1?'Left':'Right'} heading ${ha[0]}${ha[1]}${ha[2]}, ${cd===0?'Descend and maintain ':'Climb and Maintain '}${altFpmInAviation(alt)}, Speed ${sa[0]}${sa[1]}${sa[2]}, Rate ${altFpmInAviation(fpm)}`;}
+function textInstruction(t,hdg,cd,alt,spd,fpm){return `Korean air one two three tango, Turn ${t===1?'Left':'Right'} heading ${String(hdg).padStart(3,'0')}, ${cd===0?'Descend and maintain ':'Climb and Maintain '}${alt} Speed ${spd} Rate ${fpm}`;}
+
+function digitsToInt(...ds){let s=ds.map(x=>(x.value||'0').replace(/\D/g,'').slice(0,1)).join('');return parseInt(s||'0',10);}
+function updatePreviews(){
+  const hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10;
+  hdgPreview.textContent=`HDG: ${String(hdg).padStart(3,'0')}°`;
+  altPreview.textContent=`ALT: ${alt} ft`; spdPreview.textContent=`SPD: ${spd} kt`;
+}
+function addFocusRing(elm){state.order.forEach(e=>e.classList.remove('focus-ring')); if(elm) elm.classList.add('focus-ring');}
+function openKeypad(inputEl){state.activeInput=inputEl; kpTarget.textContent=inputEl.id.toUpperCase(); backdrop.style.display='block'; sheet.classList.add('show'); addFocusRing(inputEl);}
+function closeKeypad(){sheet.classList.remove('show'); backdrop.style.display='none'; state.activeInput=null; addFocusRing(null);}
+function focusSection(section){let target=section==='H'?h1:section==='A'?a1:s1; openKeypad(target); state.editSeq=true;}
+
+document.getElementById('headingBlock').addEventListener('click',()=>focusSection('H'));
+document.getElementById('altBlock').addEventListener('click',()=>focusSection('A'));
+document.getElementById('speedBlock').addEventListener('click',()=>focusSection('S'));
+
+sheet.addEventListener('click',(e)=>{
+  const btn=e.target.closest('.kp-btn'); if(!btn||!state.activeInput) return;
+  const func=btn.dataset.func;
+  if(func==='clear'){state.activeInput.value='';updatePreviews();return;}
+  if(func==='back'){state.activeInput.value='';updatePreviews(); if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx>0){openKeypad(state.order[idx-1]);}} else closeKeypad(); return;}
+  const num=e.target.textContent.trim();
+  if(/^\d$/.test(num)){
+    state.activeInput.value=num; updatePreviews();
+    if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}} else { closeKeypad(); }
+  }
+});
+backdrop.addEventListener('click',()=>{state.editSeq=false; closeKeypad();});
+kpClose.addEventListener('click',()=>{state.editSeq=false; closeKeypad();});
+
+document.addEventListener('keydown',(e)=>{
+  const k=e.key;
+  if(k==='n'||k==='N'){e.preventDefault();emitInstruction();return;}
+  if(k==='b'||k==='B'){e.preventDefault();if(state.lastTTS) speak(state.lastTTS);return;}
+  if(k==='i'||k==='I'){e.preventDefault();doInitialize();return;}
+  if(k==='h'||k==='H'){e.preventDefault();focusSection('H');return;}
+  if(k==='a'||k==='A'){e.preventDefault();focusSection('A');return;}
+  if(k==='s'||k==='S'){e.preventDefault();focusSection('S');return;}
+  if(e.code==='Space'){ // Space toggles Instruction blur
+    e.preventDefault();
+    const isBlur=textOut.classList.contains('blurred');
+    if(isBlur){ textOut.classList.remove('blurred'); blurHint.classList.add('hidden'); }
+    else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
+    return;
+  }
+  if(state.activeInput && /^[0-9]$/.test(k)){e.preventDefault();state.activeInput.value=k;updatePreviews();
+    if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}} else { closeKeypad(); }}
+  if(state.activeInput && k==='Backspace'){e.preventDefault();state.activeInput.value='';updatePreviews();}
+});
+
+function readInputsToState(){
+  const hdg=digitsToInt(h1,h2,h3)%360, alt=clampAlt(digitsToInt(a1,a2)*100), spd=clampSpd(digitsToInt(s1,s2)*10);
+  state.cur_hdg=hdg; state.cur_alt=alt; state.cur_spd=spd; state.difficulty=parseInt(difficultySel.value,10);
+  document.getElementById('initMsg').textContent='초기화 완료';
+}
+function doInitialize(){
+  readInputsToState();
+  textOut.textContent='Initialized. Next Instruction을 누르세요.';
+  textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
+}
 
 function getInstruction(difficulty,cur_hdg,cur_alt,cur_spd){
   const turn_direction=Math.floor(Math.random()*2)+1;
@@ -173,73 +295,6 @@ function getInstruction(difficulty,cur_hdg,cur_alt,cur_spd){
   return [turn_direction,target_hdg,climb_descend,target_alt,target_spd,target_fpm];
 }
 
-const el=id=>document.getElementById(id);
-const h1=el('h1'),h2=el('h2'),h3=el('h3'),headingBlock=el('headingBlock');
-const a1=el('a1'),a2=el('a2'),altBlock=el('altBlock');
-const s1=el('s1'),s2=el('s2'),speedBlock=el('speedBlock');
-const hdgPreview=el('hdgPreview'),altPreview=el('altPreview'),spdPreview=el('spdPreview');
-const initMsg=el('initMsg'),textOut=el('textOut'),blurHint=el('blurHint'),difficultySel=el('difficulty');
-const backdrop=el('backdrop'),sheet=el('sheet'),kpTarget=el('kpTarget'),kpClose=el('kpClose');
-const sayAgainBtn=el('sayAgain'),nextBtn=el('next'),initBtn=el('btnInit'),reinitBtn=el('btnReinit');
-const logList=el('logList');
-
-let state={difficulty:3,cur_hdg:0,cur_alt:3000,cur_spd:160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
-
-function digitsToInt(...ds){let s=ds.map(x=>(x.value||'0').replace(/\D/g,'').slice(0,1)).join('');return parseInt(s||'0',10);}
-function updatePreviews(){
-  const hdg=(digitsToInt(h1,h2,h3))%360,alt=digitsToInt(a1,a2)*100,spd=digitsToInt(s1,s2)*10;
-  hdgPreview.textContent=`HDG: ${String(hdg).padStart(3,'0')}°`;
-  altPreview.innerHTML=(alt>=MIN_ALT&&alt<=MAX_ALT)?`ALT: <span class="good">${alt} ft</span>`:`ALT: <span class="warn">${alt} ft (허용: ${MIN_ALT}~${MAX_ALT})</span>`;
-  spdPreview.innerHTML=(spd>=SPD_MIN&&spd<=SPD_MAX)?`SPD: <span class="good">${spd} kt</span>`:`SPD: <span class="warn">${spd} kt (허용: ${SPD_MIN}~${SPD_MAX})</span>`;
-}
-function addFocusRing(elm){state.order.forEach(e=>e.classList.remove('focus-ring')); if(elm) elm.classList.add('focus-ring');}
-function openKeypad(inputEl){state.activeInput=inputEl;kpTarget.textContent=inputEl.id.toUpperCase();backdrop.style.display='block';sheet.classList.add('show');addFocusRing(inputEl);}
-function closeKeypad(){sheet.classList.remove('show');backdrop.style.display='none';state.activeInput=null;addFocusRing(null);}
-function focusSection(section){let target=section==='H'?h1:section==='A'?a1:s1; openKeypad(target); state.editSeq=true;}
-
-headingBlock.addEventListener('click',()=>focusSection('H'));
-altBlock.addEventListener('click',()=>focusSection('A'));
-speedBlock.addEventListener('click',()=>focusSection('S'));
-
-sheet.addEventListener('click',(e)=>{
-  const btn=e.target.closest('.kp-btn'); if(!btn||!state.activeInput) return;
-  const func=btn.dataset.func;
-  if(func==='clear'){state.activeInput.value='';updatePreviews();return;}
-  if(func==='back'){state.activeInput.value='';updatePreviews(); if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx>0){openKeypad(state.order[idx-1]);}} else closeKeypad(); return;}
-  const num=btn.textContent.trim();
-  if(/^\d$/.test(num)){
-    state.activeInput.value=num; updatePreviews();
-    if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}}
-    else { closeKeypad(); }
-  }
-});
-backdrop.addEventListener('click',()=>{state.editSeq=false; closeKeypad();});
-kpClose.addEventListener('click',()=>{state.editSeq=false; closeKeypad();});
-
-document.addEventListener('keydown',(e)=>{
-  const k=e.key;
-  if(k==='n'||k==='N'){e.preventDefault();emitInstruction();return;}
-  if(k==='b'||k==='B'){e.preventDefault();if(state.lastTTS) speak(state.lastTTS);return;}
-  if(k==='i'||k==='I'){e.preventDefault();doInitialize();return;}
-  if(k==='h'||k==='H'){e.preventDefault();focusSection('H');return;}
-  if(k==='a'||k==='A'){e.preventDefault();focusSection('A');return;}
-  if(k==='s'||k==='S'){e.preventDefault();focusSection('S');return;}
-  if(state.activeInput && /^[0-9]$/.test(k)){e.preventDefault();state.activeInput.value=k;updatePreviews();
-    if(state.editSeq){const idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1){openKeypad(state.order[idx+1]);} else {state.editSeq=false; closeKeypad();}} else { closeKeypad(); }}
-  if(state.activeInput && k==='Backspace'){e.preventDefault();state.activeInput.value='';updatePreviews();}
-});
-
-function readInputsToState(){
-  const hdg=digitsToInt(h1,h2,h3)%360,alt=clampAlt(digitsToInt(a1,a2)*100),spd=clampSpd(digitsToInt(s1,s2)*10);
-  let msg=[]; if(alt!==digitsToInt(a1,a2)*100) msg.push(`[ALT] 보정→${alt}`); if(spd!==digitsToInt(s1,s2)*10) msg.push(`[SPD] 보정→${spd}`);
-  state.cur_hdg=hdg; state.cur_alt=alt; state.cur_spd=spd; state.difficulty=parseInt(difficultySel.value,10);
-  initMsg.textContent=msg.length?`보정: ${msg.join(', ')}`:'초기화 완료';
-}
-function doInitialize(){
-  readInputsToState();
-  textOut.textContent='Initialized. Next Instruction을 누르세요.';
-  textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
-}
 function emitInstruction(){
   if(state.lastText){
     const item=document.createElement('div'); item.className='log-item mono'; item.textContent=state.lastText; logList.prepend(item);
@@ -249,28 +304,32 @@ function emitInstruction(){
   const text=textInstruction(turnd,target_hdg,climbdescend,target_alt,target_spd,target_fpm);
   const tts=instructionForTTS(turnd,target_hdg,climbdescend,target_alt,target_spd,target_fpm);
   state.lastText=text; state.lastTTS=tts; state.cur_hdg=target_hdg; state.cur_alt=target_alt; state.cur_spd=target_spd;
-  textOut.textContent=text; textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); speak(tts);
+  textOut.textContent=text; textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
+  speak(tts);
 }
-el('btnInit').addEventListener('click',doInitialize);
-el('btnReinit').addEventListener('click',()=>{doInitialize(); textOut.textContent='Reinitialized. Next Instruction을 누르세요.';});
-el('sayAgain').addEventListener('click',()=>{if(state.lastTTS) speak(state.lastTTS);});
-el('next').addEventListener('click',emitInstruction);
-document.querySelector('.blur-wrap').addEventListener('click',()=>{
+
+document.getElementById('btnInit').addEventListener('click', doInitialize);
+document.getElementById('btnReinit').addEventListener('click', ()=>{ doInitialize(); textOut.textContent='Reinitialized. Next Instruction을 누르세요.'; });
+document.getElementById('sayAgain').addEventListener('click', ()=>{ if(state.lastTTS) speak(state.lastTTS); });
+document.getElementById('next').addEventListener('click', emitInstruction);
+document.querySelector('.blur-wrap').addEventListener('click', ()=>{
   const isBlur=textOut.classList.contains('blurred');
-  if(isBlur){textOut.classList.remove('blurred'); blurHint.classList.add('hidden');}
-  else{textOut.classList.add('blurred'); blurHint.classList.remove('hidden');}
+  if(isBlur){ textOut.classList.remove('blurred'); blurHint.classList.add('hidden'); }
+  else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
 });
+
 function setDefaultInputs(hdg=190,alt=4000,spd=210){
   const h=String(hdg).padStart(3,'0'); h1.value=h[0]; h2.value=h[1]; h3.value=h[2];
   const a=String(Math.round(alt/100)).padStart(2,'0'); a1.value=a[0]; a2.value=a[1];
-  const s=String(Math.round(spd/10)).padStart(2,'0'); s1.value=s[0]; s2.value=s[1]; updatePreviews();
+  const s=String(Math.round(spd/10)).padStart(2,'0'); s1.value=s[0]; s2.value=s[1];
+  updatePreviews();
 }
 setDefaultInputs();
 textOut.textContent='숫자를 입력한 뒤 Initialize(I) 또는 Next(N)를 사용하세요.';
 
-// PWA registration
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+// Register service worker for PWA
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('./service-worker.js');
   });
 }
