@@ -49,8 +49,18 @@
   #logList .log-item{border-top:1px dashed #e5e5e9;padding:8px 0}
   .control{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   select, input[type="range"]{padding:6px;border:1px solid #d0d0d8;border-radius:10px}
-  .approach {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .approach .speed {font-size:20px;font-weight:700}
+
+  /* --- Approach Generator 스타일 --- */
+  .approach-wrap{display:flex;flex-direction:column;gap:10px}
+  .ap-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+  .ap-box{flex:0 0 auto}
+  .ap-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px dashed #d0d0d8;border-radius:999px;color:#555;background:#fafafa}
+  .ap-digit{width:56px;height:60px;border-radius:14px;font-size:26px}
+  .ap-mid{font-weight:700;font-size:22px;padding:0 6px}
+  .ap-big{font-size:28px;font-weight:800;padding:0 12px;border-radius:12px;background:#111;color:#fff;border:1px solid #111}
+  .ap-big small{font-size:14px;font-weight:600;opacity:.9;margin-left:6px}
+  .ap-range{font-size:13px;color:#666;margin-left:6px}
+  .ap-value{font-size:28px;font-weight:800}
   #diag{margin-top:10px;font-size:12px;color:#b00020}
 </style>
 </head>
@@ -59,7 +69,7 @@
     <div class="row" style="justify-content:space-between;">
       <div>
         <h1>ATC Drill (PWA v3)</h1>
-        <div class="muted">H/A/S 이동 · N(Next)/B(Say again)/I(Init)/R(Reinit) · <b>Space</b>=Instruction 토글</div>
+        <div class="muted">H/A/S 이동 · N(Next)/B(Say again)/I(Init)/R(Reinit) · <b>Space</b>=Instruction 토글 · <b>G</b>=Approach Generate</div>
       </div>
       <div class="control">
         <label class="label">Voice <select id="voiceSel"></select></label>
@@ -71,6 +81,7 @@
   </div>
 
   <div class="grid">
+    <!-- 입력/난이도 -->
     <div class="card">
       <div class="row" style="justify-content:space-between;">
         <div class="col" style="flex:1">
@@ -119,6 +130,7 @@
       </div>
     </div>
 
+    <!-- 인스트럭션/로그/어프로치 -->
     <div class="card">
       <div class="row" style="flex-wrap:wrap;gap:10px">
         <button id="sayAgain">Say Again <span class="hint">B</span></button>
@@ -135,34 +147,38 @@
         <div id="logList"></div>
       </div>
 
+      <!-- Approach Speed Generator (개선) -->
       <div class="card" style="margin-top:14px">
-        <div class="label">Approach Speed Generator</div>
-        <div class="approach" style="margin-top:8px">
-          <div class="col">
-            <span class="label">Min (kt)</span>
-            <div class="digit-grid" id="apprMinBlock">
-              <input class="digit" id="pmin1" readonly maxlength="1" />
-              <input class="digit" id="pmin2" readonly maxlength="1" />
-              <input class="digit" id="pmin3" readonly maxlength="1" />
+        <div class="label">Approach Speed Generator <span class="ap-chip">기본 145–152 kt</span></div>
+        <div class="approach-wrap">
+          <div class="ap-row">
+            <div class="ap-box">
+              <span class="label">Min (kt)</span>
+              <div class="digit-grid" id="apprMinBlock">
+                <input class="digit ap-digit" id="pmin1" readonly maxlength="1" />
+                <input class="digit ap-digit" id="pmin2" readonly maxlength="1" />
+                <input class="digit ap-digit" id="pmin3" readonly maxlength="1" />
+              </div>
+            </div>
+            <div class="ap-mid">~</div>
+            <div class="ap-box">
+              <span class="label">Max (kt)</span>
+              <div class="digit-grid" id="apprMaxBlock">
+                <input class="digit ap-digit" id="pmax1" readonly maxlength="1" />
+                <input class="digit ap-digit" id="pmax2" readonly maxlength="1" />
+                <input class="digit ap-digit" id="pmax3" readonly maxlength="1" />
+              </div>
+            </div>
+            <div class="ap-box" style="margin-left:auto">
+              <button id="btnApproach" class="ap-big">Generate <small>G</small></button><span class="ap-range" id="apprRangeNote">범위: 145–152 kt</span>
             </div>
           </div>
-          <div class="col">
-            <span class="label">Max (kt)</span>
-            <div class="digit-grid" id="apprMaxBlock">
-              <input class="digit" id="pmax1" readonly maxlength="1" />
-              <input class="digit" id="pmax2" readonly maxlength="1" />
-              <input class="digit" id="pmax3" readonly maxlength="1" />
-            </div>
-          </div>
-          <div class="col" style="justify-content:flex-end">
-            <button id="btnApproach" class="primary">Generate</button>
-            <div class="note mono" id="apprRangeNote">범위: 145–152 kt</div>
-          </div>
-          <div class="col" style="flex:1;align-items:flex-start;justify-content:flex-end">
-            <span id="apprVal" class="speed mono">—</span>
+          <div class="ap-row">
+            <div class="label">Result</div>
+            <div class="ap-value mono" id="apprVal">—</div>
           </div>
         </div>
-        <div class="note">* 이 범위는 위 툴과 독립적입니다. 입력은 팝업 키패드로만 가능합니다.</div>
+        <div class="note">* 이 범위는 위 툴과 독립적입니다. 숫자 입력은 팝업 키패드로만 가능합니다.</div>
       </div>
 
       <div id="diag"></div>
@@ -187,15 +203,13 @@
   </div>
 
 <script>
-/* === 화면에 에러 표시 (디버그) === */
+/* ===== 화면 에러 표기 ===== */
 (function(){
-  var diag = document.getElementById('diag');
-  window.onerror = function(msg, src, line, col, err){
-    diag.textContent = '[Error] ' + msg + ' @' + line + ':' + col;
-  };
+  var diag=document.getElementById('diag');
+  window.onerror=function(msg,src,line,col,err){ diag.textContent='[Error] '+msg+' @'+line+':'+col; };
 })();
 
-/* ===== TTS (Samantha 기본) — optional chaining 제거 ===== */
+/* ===== TTS (Samantha 우선) ===== */
 var voiceSel=document.getElementById('voiceSel');
 var rateEl=document.getElementById('rate');
 var pitchEl=document.getElementById('pitch');
@@ -203,42 +217,31 @@ var txLamp=document.getElementById('txLamp');
 
 function loadVoices(){
   try{
-    var vs = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-    var prev = voiceSel.value || '';
-    voiceSel.innerHTML='';
-    for(var i=0;i<vs.length;i++){
-      var v=vs[i], opt=document.createElement('option');
-      opt.value=v.name; opt.textContent=v.name+' ('+v.lang+')';
-      voiceSel.appendChild(opt);
-    }
-    var opts = voiceSel.options;
-    if (prev){
-      for (var j=0;j<opts.length;j++){ if(opts[j].value===prev){ voiceSel.value=prev; return; } }
-    }
-    for (var j1=0;j1<opts.length;j1++){ if(/Samantha/.test(opts[j1].value)){ voiceSel.value=opts[j1].value; return; } }
-    for (var j2=0;j2<opts.length;j2++){ if(/\(en-US\)/.test(opts[j2].textContent)){ voiceSel.value=opts[j2].value; return; } }
-    for (var j3=0;j3<opts.length;j3++){ if(/\(en-/.test(opts[j3].textContent)){ voiceSel.value=opts[j3].value; return; } }
-    if (opts.length) voiceSel.selectedIndex=0;
-  }catch(e){ document.getElementById('diag').textContent = '[Voices] '+e.message; }
+    var vs=window.speechSynthesis?window.speechSynthesis.getVoices():[];
+    var prev=voiceSel.value||''; voiceSel.innerHTML='';
+    for(var i=0;i<vs.length;i++){ var v=vs[i],opt=document.createElement('option'); opt.value=v.name; opt.textContent=v.name+' ('+v.lang+')'; voiceSel.appendChild(opt); }
+    var opts=voiceSel.options;
+    if(prev){ for(var j=0;j<opts.length;j++){ if(opts[j].value===prev){ voiceSel.value=prev; return; } } }
+    for(var j1=0;j1<opts.length;j1++){ if(/Samantha/.test(opts[j1].value)){ voiceSel.value=opts[j1].value; return; } }
+    for(var j2=0;j2<opts.length;j2++){ if(/\(en-US\)/.test(opts[j2].textContent)){ voiceSel.value=opts[j2].value; return; } }
+    for(var j3=0;j3<opts.length;j3++){ if(/\(en-/.test(opts[j3].textContent)){ voiceSel.value=opts[j3].value; return; } }
+    if(opts.length) voiceSel.selectedIndex=0;
+  }catch(e){ document.getElementById('diag').textContent='[Voices] '+e.message; }
 }
-if ('speechSynthesis' in window){
-  loadVoices();
-  window.speechSynthesis.onvoiceschanged = loadVoices;
-}
+if('speechSynthesis' in window){ loadVoices(); window.speechSynthesis.onvoiceschanged=loadVoices; }
 
 function speak(text){
   if(!('speechSynthesis' in window)) return;
-  var u = new SpeechSynthesisUtterance(text);
-  var voices = window.speechSynthesis.getVoices();
-  var chosen = null, wanted = voiceSel ? voiceSel.value : '';
-  for (var i=0;i<voices.length;i++){ if(voices[i].name === wanted){ chosen = voices[i]; break; } }
-  if(!chosen){ for (var i2=0;i2<voices.length;i2++){ if(/Samantha/.test(voices[i2].name)){ chosen=voices[i2]; break; } } }
-  if(!chosen){ for (var i3=0;i3<voices.length;i3++){ if(voices[i3].lang === 'en-US'){ chosen=voices[i3]; break; } } }
-  if(!chosen){ for (var i4=0;i4<voices.length;i4++){ var L=(voices[i4].lang||'').toLowerCase(); if(L.indexOf('en')===0){ chosen=voices[i4]; break; } } }
-  if(!chosen && voices.length) chosen = voices[0];
-  if (chosen){ u.voice=chosen; u.lang = chosen.lang || 'en-US'; } else { u.lang = 'en-US'; }
-  u.rate = parseFloat(rateEl ? rateEl.value : '0.9') || 0.9;
-  u.pitch = parseFloat(pitchEl ? pitchEl.value : '0.9') || 0.9;
+  var u=new SpeechSynthesisUtterance(text);
+  var voices=window.speechSynthesis.getVoices(), chosen=null, wanted=voiceSel?voiceSel.value:'';
+  for(var i=0;i<voices.length;i++){ if(voices[i].name===wanted){ chosen=voices[i]; break; } }
+  if(!chosen){ for(var i2=0;i2<voices.length;i2++){ if(/Samantha/.test(voices[i2].name)){ chosen=voices[i2]; break; } } }
+  if(!chosen){ for(var i3=0;i3<voices.length;i3++){ if(voices[i3].lang==='en-US'){ chosen=voices[i3]; break; } } }
+  if(!chosen){ for(var i4=0;i4<voices.length;i4++){ var L=(voices[i4].lang||'').toLowerCase(); if(L.indexOf('en')===0){ chosen=voices[i4]; break; } } }
+  if(!chosen && voices.length) chosen=voices[0];
+  if(chosen){ u.voice=chosen; u.lang=chosen.lang||'en-US'; } else { u.lang='en-US'; }
+  u.rate=parseFloat(rateEl?rateEl.value:'0.9')||0.9;
+  u.pitch=parseFloat(pitchEl?pitchEl.value:'0.9')||0.9;
   u.onstart=function(){ txLamp.classList.remove('hidden'); };
   u.onend=function(){ txLamp.classList.add('hidden'); };
   try{ window.speechSynthesis.cancel(); }catch(_){}
@@ -248,27 +251,21 @@ function speak(text){
 /* ===== Core ===== */
 var MIN_ALT=3000, MAX_ALT=7500, SPD_MIN=160, SPD_MAX=210;
 function $(id){ return document.getElementById(id); }
-var h1=$('h1'), h2=$('h2'), h3=$('h3'), a1=$('a1'), a2=$('a2'), s1=$('s1'), s2=$('s2');
-var hdgPreview=$('hdgPreview'), altPreview=$('altPreview'), spdPreview=$('spdPreview');
-var textOut=$('textOut'), blurHint=$('blurHint'), difficultySel=$('difficulty');
-var sayAgainBtn=$('sayAgain'), nextBtn=$('next'), initBtn=$('btnInit'), reinitBtn=$('btnReinit');
-var logList=$('logList'), headingBlock=$('headingBlock'), altBlock=$('altBlock'), speedBlock=$('speedBlock');
-var backdrop=$('backdrop'), sheet=$('sheet'), kpTarget=$('kpTarget'), kpClose=$('kpClose');
-var apprMinBlock=$('apprMinBlock'), apprMaxBlock=$('apprMaxBlock');
-var pmin1=$('pmin1'), pmin2=$('pmin2'), pmin3=$('pmin3'), pmax1=$('pmax1'), pmax2=$('pmax2'), pmax3=$('pmax3');
-var btnApproach=$('btnApproach'), apprVal=$('apprVal'), apprRangeNote=$('apprRangeNote');
+var h1=$('h1'),h2=$('h2'),h3=$('h3'),a1=$('a1'),a2=$('a2'),s1=$('s1'),s2=$('s2');
+var hdgPreview=$('hdgPreview'),altPreview=$('altPreview'),spdPreview=$('spdPreview');
+var textOut=$('textOut'),blurHint=$('blurHint'),difficultySel=$('difficulty');
+var sayAgainBtn=$('sayAgain'),nextBtn=$('next'),initBtn=$('btnInit'),reinitBtn=$('btnReinit');
+var logList=$('logList'),headingBlock=$('headingBlock'),altBlock=$('altBlock'),speedBlock=$('speedBlock');
+var backdrop=$('backdrop'),sheet=$('sheet'),kpTarget=$('kpTarget'),kpClose=$('kpClose');
+var apprMinBlock=$('apprMinBlock'),apprMaxBlock=$('apprMaxBlock');
+var pmin1=$('pmin1'),pmin2=$('pmin2'),pmin3=$('pmin3'),pmax1=$('pmax1'),pmax2=$('pmax2'),pmax3=$('pmax3');
+var btnApproach=$('btnApproach'),apprVal=$('apprVal'),apprRangeNote=$('apprRangeNote');
 
-var state={
-  difficulty:3,
-  cur_hdg:0,
-  cur_alt:3000,
-  cur_spd:160,
-  lastText:"",
-  lastTTS:"",
-  activeInput:null,
-  editSeq:false,
-  order:[h1,h2,h3,a1,a2,s1,s2]
-};
+var state={difficulty:3,cur_hdg:0,cur_alt:3000,cur_spd:160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
+
+/* --- Approach용 시퀀스 제어 --- */
+var approachSeq=false;
+var approachOrder=[];    // [pmin1,pmin2,pmin3] 또는 [pmax1,pmax2,pmax3]
 
 function clampAlt(a){ a=parseInt(a||0,10); if(a<MIN_ALT)a=MIN_ALT; if(a>MAX_ALT)a=MAX_ALT; return a; }
 function clampSpd(s){ s=parseInt(s||0,10); if(s<SPD_MIN)s=SPD_MIN; if(s>SPD_MAX)s=SPD_MAX; return s; }
@@ -278,14 +275,24 @@ function digitsToInt(){ var s=''; for(var i=0;i<arguments.length;i++){ var x=arg
 function updatePreviews(){ var hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10; hdgPreview.textContent='HDG: '+(''+hdg).padStart(3,'0')+'°'; altPreview.textContent='ALT: '+alt+' ft'; spdPreview.textContent='SPD: '+spd+' kt'; }
 function addFocusRing(elm){ var arr=state.order.concat([pmin1,pmin2,pmin3,pmax1,pmax2,pmax3]); for(var i=0;i<arr.length;i++){ if(arr[i]) arr[i].classList.remove('focus-ring'); } if(elm) elm.classList.add('focus-ring'); }
 function openKeypad(inputEl){ state.activeInput=inputEl; kpTarget.textContent=inputEl.id.toUpperCase(); backdrop.style.display='block'; sheet.classList.add('show'); addFocusRing(inputEl); }
-function closeKeypad(){ sheet.classList.remove('show'); backdrop.style.display='none'; state.activeInput=null; addFocusRing(null); }
+function closeKeypad(){ sheet.classList.remove('show'); backdrop.style.display='none'; state.activeInput=null; addFocusRing(null); state.editSeq=false; approachSeq=false; approachOrder=[]; }
 function focusSection(section){ var target=(section==='H')?h1:(section==='A')?a1:s1; openKeypad(target); state.editSeq=true; }
 
 headingBlock.addEventListener('click',function(){ focusSection('H'); });
 altBlock.addEventListener('click',function(){ focusSection('A'); });
 speedBlock.addEventListener('click',function(){ focusSection('S'); });
-apprMinBlock.addEventListener('click',function(e){ var t=e.target.closest?e.target.closest('.digit'):null; openKeypad(t||pmin1); state.editSeq=false; });
-apprMaxBlock.addEventListener('click',function(e){ var t=e.target.closest?e.target.closest('.digit'):null; openKeypad(t||pmax1); state.editSeq=false; });
+
+/* Min/Max: 3자리 모두 입력 전까지 팝업 유지 */
+apprMinBlock.addEventListener('click',function(e){
+  var t=e.target && e.target.classList && e.target.classList.contains('digit') ? e.target : pmin1;
+  approachSeq=true; approachOrder=[pmin1,pmin2,pmin3];
+  openKeypad(t);
+});
+apprMaxBlock.addEventListener('click',function(e){
+  var t=e.target && e.target.classList && e.target.classList.contains('digit') ? e.target : pmax1;
+  approachSeq=true; approachOrder=[pmax1,pmax2,pmax3];
+  openKeypad(t);
+});
 
 sheet.addEventListener('click',function(e){
   var btn=e.target; while(btn && !btn.classList.contains('kp-btn')) btn=btn.parentNode;
@@ -293,26 +300,34 @@ sheet.addEventListener('click',function(e){
   var func=btn.getAttribute('data-func');
   if(func==='clear'){ state.activeInput.value=''; updatePreviews(); updateApprNote(); return; }
   if(func==='back'){ state.activeInput.value=''; updatePreviews(); updateApprNote();
-    if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx>0) openKeypad(state.order[idx-1]); }
-    else closeKeypad(); return;
+    if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx>0) openKeypad(state.order[idx-1]); else closeKeypad(); }
+    else if(approachSeq){ var idxx=approachOrder.indexOf(state.activeInput); if(idxx>0) openKeypad(approachOrder[idxx-1]); else closeKeypad(); }
+    else closeKeypad();
+    return;
   }
   var num=(btn.textContent||'').trim();
   if(/^\d$/.test(num)){
     state.activeInput.value=num; updatePreviews(); updateApprNote();
     if(state.editSeq){
       var i=state.order.indexOf(state.activeInput);
-      if(i<state.order.length-1) openKeypad(state.order[i+1]); else { state.editSeq=false; closeKeypad(); }
-    } else closeKeypad();
+      if(i<state.order.length-1) openKeypad(state.order[i+1]); else closeKeypad();
+    } else if (approachSeq){
+      var j=approachOrder.indexOf(state.activeInput);
+      if(j<approachOrder.length-1) openKeypad(approachOrder[j+1]); else closeKeypad();
+    } else {
+      closeKeypad();
+    }
   }
 });
-backdrop.addEventListener('click',function(){ state.editSeq=false; closeKeypad(); });
-kpClose.addEventListener('click',function(){ state.editSeq=false; closeKeypad(); });
+backdrop.addEventListener('click',function(){ closeKeypad(); });
+kpClose.addEventListener('click',function(){ closeKeypad(); });
 
 /* 버튼 이벤트 */
-initBtn.addEventListener('click', doInitialize);
-reinitBtn.addEventListener('click', doReinitialize);
-sayAgainBtn.addEventListener('click', function(){ if(state.lastTTS) speak(state.lastTTS); });
-nextBtn.addEventListener('click', emitInstruction);
+$('btnInit').addEventListener('click', doInitialize);
+$('btnReinit').addEventListener('click', doReinitialize);
+$('sayAgain').addEventListener('click', function(){ if(state.lastTTS) speak(state.lastTTS); });
+$('next').addEventListener('click', emitInstruction);
+$('btnApproach').addEventListener('click', function(){ genApproach(true); });
 
 /* 키보드 */
 document.addEventListener('keydown',function(e){
@@ -324,15 +339,18 @@ document.addEventListener('keydown',function(e){
   if(k==='h'||k==='H'){ e.preventDefault(); focusSection('H'); return; }
   if(k==='a'||k==='A'){ e.preventDefault(); focusSection('A'); return; }
   if(k==='s'||k==='S'){ e.preventDefault(); focusSection('S'); return; }
+  if(k==='g'||k==='G'){ e.preventDefault(); genApproach(true); return; } /* G키로 생성 + TTS */
   if(e.code==='Space'){ e.preventDefault(); var isBlur=textOut.classList.contains('blurred');
     if(isBlur){ textOut.classList.remove('blurred'); blurHint.classList.add('hidden'); }
     else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
     return;
   }
+  /* 어프로치 필드는 키보드 입력 금지 */
   var apprSet=[pmin1,pmin2,pmin3,pmax1,pmax2,pmax3];
   if(state.activeInput && apprSet.indexOf(state.activeInput)!==-1){ e.stopPropagation(); return; }
+  /* 일반 입력: 숫자 */
   if(state.activeInput && /^[0-9]$/.test(k)){ e.preventDefault(); state.activeInput.value=k; updatePreviews();
-    if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1) openKeypad(state.order[idx+1]); else { state.editSeq=false; closeKeypad(); } }
+    if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1) openKeypad(state.order[idx+1]); else closeKeypad(); }
     else closeKeypad(); }
   if(state.activeInput && k==='Backspace'){ e.preventDefault(); state.activeInput.value=''; updatePreviews(); }
 });
@@ -353,7 +371,7 @@ function doReinitialize(){
   textOut.textContent='Reinitialized. Next Instruction을 누르세요.';
 }
 
-/* Approach Speed */
+/* ---- Approach Speed ---- */
 function readApprMin(){ return digitsToInt(pmin1,pmin2,pmin3) || 145; }
 function readApprMax(){ return digitsToInt(pmax1,pmax2,pmax3) || 152; }
 function updateApprNote(){
@@ -361,16 +379,17 @@ function updateApprNote(){
   var lo=Math.min(mn,mx), hi=Math.max(mn,mx);
   apprRangeNote.textContent='범위: '+lo+'–'+hi+' kt';
 }
-function genApproach(){
+function genApproach(doTTS){
   var mn=readApprMin(), mx=readApprMax(); if(mn>mx){ var t=mn; mn=mx; mx=t; }
   var v = Math.floor(Math.random()*(mx-mn+1))+mn;
   apprVal.textContent = v+' kt';
+  if(doTTS){ speak('Approach Speed '+v+' knots, Approach Speed '+v+' knots'); }
 }
-btnApproach.addEventListener('click', genApproach);
+updateApprNote();
 
-/* Instruction */
+/* ---- Instruction ---- */
 function getInstruction(d,cur_hdg,cur_alt,cur_spd){
-  var turnd = Math.floor(Math.random()*2)+1;
+  var turnd=Math.floor(Math.random()*2)+1;
   var target_hdg=cur_hdg, climb_descend=Math.floor(Math.random()*2);
   var target_alt=cur_alt, target_spd=cur_spd, target_fpm=1000;
   if(cur_alt<=MIN_ALT) climb_descend=1;
@@ -422,9 +441,7 @@ function emitInstruction(){
 
 /* 기본값 */
 function setDefaultInputs(hdg,alt,spd){
-  hdg = (typeof hdg==='number')?hdg:330;
-  alt = (typeof alt==='number')?alt:3000;
-  spd = (typeof spd==='number')?spd:170;
+  hdg=(typeof hdg==='number')?hdg:330; alt=(typeof alt==='number')?alt:3000; spd=(typeof spd==='number')?spd:170;
   var h=(''+hdg).padStart(3,'0'); h1.value=h[0]; h2.value=h[1]; h3.value=h[2];
   var a=(''+Math.round(alt/100)).padStart(2,'0'); a1.value=a[0]; a2.value=a[1];
   var s=(''+Math.round(spd/10)).padStart(2,'0'); s1.value=s[0]; s2.value=s[1];
@@ -440,10 +457,11 @@ setDefaultInputs(330,3000,170);
 setDefaultApproach(145,152);
 textOut.textContent='숫자를 입력한 뒤 Initialize(I/R) 또는 Next(N)를 사용하세요. Approach 범위는 카드에서 팝업 키패드로 조정.';
 
-/* PWA SW (원하면 주석 해제). 캐시 문제 있으면 강력 새로고침 필수 */
-// if ('serviceWorker' in navigator){
-//   window.addEventListener('load', function(){ navigator.serviceWorker.register('./service-worker.js?v=4'); });
-// }
+/* PWA SW 등록은 필요 시 사용하세요
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('./service-worker.js?v=5'); });
+}
+*/
 </script>
 </body>
 </html>
