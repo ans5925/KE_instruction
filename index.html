@@ -135,6 +135,13 @@
         <div id="blurHint" class="blur-hint">터치 또는 Space로 보기</div>
       </div>
 
+      <!-- Instruction Log -->
+      <div class="card" style="margin-top:14px">
+        <div class="label">Instruction Log</div>
+        <div id="logList"></div>
+      </div>
+
+      <!-- Approach Speed Generator (하단에 배치) -->
       <div class="card" style="margin-top:14px">
         <div class="label">Approach Speed Generator</div>
         <div class="approach" style="margin-top:8px">
@@ -163,11 +170,6 @@
           </div>
         </div>
         <div class="note">* 이 범위는 위 툴과 독립적입니다. 입력은 팝업 키패드로만 가능합니다.</div>
-      </div>
-
-      <div class="card" style="margin-top:14px">
-        <div class="label">Instruction Log</div>
-        <div id="logList"></div>
       </div>
     </div>
   </div>
@@ -260,7 +262,17 @@ const pmin1=el('pmin1'),pmin2=el('pmin2'),pmin3=el('pmin3');
 const pmax1=el('pmax1'),pmax2=el('pmax2'),pmax3=el('pmax3');
 const btnApproach=el('btnApproach'), apprVal=el('apprVal'), apprRangeNote=el('apprRangeNote');
 
-let state={difficulty:3,cur_hdg:0,cur_alt=3000,cur_spd=160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
+let state={
+  difficulty:3,
+  cur_hdg:0,
+  cur_alt:3000,
+  cur_spd:160,
+  lastText:"",
+  lastTTS:"",
+  activeInput:null,
+  editSeq:false,
+  order:[h1,h2,h3,a1,a2,s1,s2]
+};
 
 function clampAlt(a){return Math.max(MIN_ALT,Math.min(MAX_ALT,Math.trunc(a)));}
 function clampSpd(s){return Math.max(SPD_MIN,Math.min(SPD_MAX,Math.trunc(s)));}
@@ -327,7 +339,7 @@ document.addEventListener('keydown',(e)=>{
     else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
     return;
   }
-  // prevent keyboard entry for approach fields: ignore numeric/backspace when target is approach
+  // prevent keyboard entry for approach fields
   const apprSet = new Set([pmin1,pmin2,pmin3,pmax1,pmax2,pmax3]);
   if(state.activeInput && apprSet.has(state.activeInput)){
     e.stopPropagation();
@@ -428,7 +440,7 @@ function emitInstruction(){
   speak(tts);
 }
 
-function setDefaultInputs(hdg=190,alt=4000,spd=210){
+function setDefaultInputs(hdg=330,alt=3000,spd=170){
   const h=String(hdg).padStart(3,'0'); h1.value=h[0]; h2.value=h[1]; h3.value=h[2];
   const a=String(Math.round(alt/100)).padStart(2,'0'); a1.value=a[0]; a2.value=a[1];
   const s=String(Math.round(spd/10)).padStart(2,'0'); s1.value=s[0]; s2.value=s[1];
@@ -439,14 +451,8 @@ function setDefaultApproach(minv=145,maxv=152){
   const mx=String(maxv).padStart(3,'0'); pmax1.value=mx[0]; pmax2.value=mx[1]; pmax3.value=mx[2];
   updateApprNote();
 }
-function digitsToInt(...ds){let s=ds.map(x=>(x.value||'0').replace(/\D/g,'').slice(0,1)).join('');return parseInt(s||'0',10);}
-function updatePreviews(){
-  const hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10;
-  hdgPreview.textContent=`HDG: ${String(hdg).padStart(3,'0')}°`;
-  altPreview.textContent=`ALT: ${alt} ft`; spdPreview.textContent=`SPD: ${spd} kt`;
-}
 
-setDefaultInputs();
+setDefaultInputs(330,3000,170);
 setDefaultApproach(145,152);
 textOut.textContent='숫자를 입력한 뒤 Initialize(I/R) 또는 Next(N)를 사용하세요. Approach 범위는 카드에서 팝업 키패드로 조정.';
 
