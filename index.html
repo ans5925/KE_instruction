@@ -383,7 +383,9 @@ function genApproach(doTTS){
   var mn=readApprMin(), mx=readApprMax(); if(mn>mx){ var t=mn; mn=mx; mx=t; }
   var v = Math.floor(Math.random()*(mx-mn+1))+mn;
   apprVal.textContent = v+' kt';
-  if(doTTS){ speak('Approach Speed '+v+' knots, Approach Speed '+v+' knots'); }
+  if(doTTS){ 
+    var w = digitsAvi(v); // "One Four Two"
+    speak('Approach Speed '+w+' knots, Approach Speed '+w+' knots'); }
 }
 updateApprNote();
 
