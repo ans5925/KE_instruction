@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>ATC Drill (PWA v3)</title>
+<title>ATC Drill (PWA v3, compat)</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,7 +14,7 @@
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:16px;line-height:1.35;background:#f7f7f9}
   h1{font-size:18px;margin:0 0 8px}
   .card{background:#fff;border:1px solid #e6e6ea;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
-  .row{display:flex;gap:var(--gap);flex-wrap:wrap;align-items:center}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .col{display:flex;flex-direction:column;gap:6px}
   .label{font-size:13px;color:#666;display:flex;align-items:center;gap:6px}
   .hint{font-size:12px;color:#999;border:1px solid #ddd;border-radius:6px;padding:1px 6px}
@@ -28,7 +28,7 @@
   .danger{background:#ff3b30;color:#fff;border-color:#ff3b30}
   .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
   .muted{color:#666}
-  .grid{display:grid;grid-template-columns:1fr;gap:var(--gap)}
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
   @media (min-width:920px){ .grid{grid-template-columns:1fr 1fr} }
   .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #ddd;border-radius:999px;font-size:12px;color:#555}
   .tx{color:#fff;background:#ff3b30;border-color:#ff3b30}
@@ -51,11 +51,12 @@
   select, input[type="range"]{padding:6px;border:1px solid #d0d0d8;border-radius:10px}
   .approach {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .approach .speed {font-size:20px;font-weight:700}
+  #diag{margin-top:10px;font-size:12px;color:#b00020}
 </style>
 </head>
 <body>
   <div class="card">
-    <div class="row" style="justify-content:space-between;gap:12px">
+    <div class="row" style="justify-content:space-between;">
       <div>
         <h1>ATC Drill (PWA v3)</h1>
         <div class="muted">H/A/S 이동 · N(Next)/B(Say again)/I(Init)/R(Reinit) · <b>Space</b>=Instruction 토글</div>
@@ -163,9 +164,12 @@
         </div>
         <div class="note">* 이 범위는 위 툴과 독립적입니다. 입력은 팝업 키패드로만 가능합니다.</div>
       </div>
+
+      <div id="diag"></div>
     </div>
   </div>
 
+  <!-- Keypad -->
   <div id="backdrop" class="sheet-backdrop"></div>
   <div id="sheet" class="sheet" aria-hidden="true">
     <div class="sheet-head">
@@ -183,116 +187,263 @@
   </div>
 
 <script>
-/* ===== TTS (Samantha 기본) ===== */
-const voiceSel=document.getElementById('voiceSel'),rateEl=document.getElementById('rate'),pitchEl=document.getElementById('pitch'),txLamp=document.getElementById('txLamp');
-function loadVoices(){const vs=window.speechSynthesis.getVoices();const prev=voiceSel.value;voiceSel.innerHTML='';vs.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=`${v.name} (${v.lang})`;voiceSel.appendChild(o)});if(prev&&[...voiceSel.options].some(o=>o.value===prev)){voiceSel.value=prev;return}const s=[...voiceSel.options].find(o=>/Samantha/.test(o.value));if(s){voiceSel.value=s.value;return}const us=[...voiceSel.options].find(o=>/(en-US)/.test(o.textContent));if(us){voiceSel.value=us.value;return}const en=[...voiceSel.options].find(o=>/(en-/.test(o.textContent));if(en){voiceSel.value=en.value;return}if(voiceSel.options.length)voiceSel.selectedIndex=0}
-if('speechSynthesis'in window){loadVoices();window.speechSynthesis.onvoiceschanged=loadVoices}
-function speak(text){if(!('speechSynthesis'in window))return;const u=new SpeechSynthesisUtterance(text);const voices=window.speechSynthesis.getVoices();let ch=voices.find(v=>v.name===(voiceSel?.value||''))||voices.find(v=>v.name.includes('Samantha'))||voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang?.toLowerCase().startsWith('en'))||(voices[0]);if(ch){u.voice=ch;u.lang=ch.lang||'en-US'}else{u.lang='en-US'}u.rate=parseFloat(rateEl?.value||'0.9');u.pitch=parseFloat(pitchEl?.value||'0.9');u.onstart=()=>txLamp.classList.remove('hidden');u.onend=()=>txLamp.classList.add('hidden');window.speechSynthesis.cancel();window.speechSynthesis.speak(u)}
+/* === 화면에 에러 표시 (디버그) === */
+(function(){
+  var diag = document.getElementById('diag');
+  window.onerror = function(msg, src, line, col, err){
+    diag.textContent = '[Error] ' + msg + ' @' + line + ':' + col;
+  };
+})();
+
+/* ===== TTS (Samantha 기본) — optional chaining 제거 ===== */
+var voiceSel=document.getElementById('voiceSel');
+var rateEl=document.getElementById('rate');
+var pitchEl=document.getElementById('pitch');
+var txLamp=document.getElementById('txLamp');
+
+function loadVoices(){
+  try{
+    var vs = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    var prev = voiceSel.value || '';
+    voiceSel.innerHTML='';
+    for(var i=0;i<vs.length;i++){
+      var v=vs[i], opt=document.createElement('option');
+      opt.value=v.name; opt.textContent=v.name+' ('+v.lang+')';
+      voiceSel.appendChild(opt);
+    }
+    var opts = voiceSel.options;
+    if (prev){
+      for (var j=0;j<opts.length;j++){ if(opts[j].value===prev){ voiceSel.value=prev; return; } }
+    }
+    for (var j1=0;j1<opts.length;j1++){ if(/Samantha/.test(opts[j1].value)){ voiceSel.value=opts[j1].value; return; } }
+    for (var j2=0;j2<opts.length;j2++){ if(/\(en-US\)/.test(opts[j2].textContent)){ voiceSel.value=opts[j2].value; return; } }
+    for (var j3=0;j3<opts.length;j3++){ if(/\(en-/.test(opts[j3].textContent)){ voiceSel.value=opts[j3].value; return; } }
+    if (opts.length) voiceSel.selectedIndex=0;
+  }catch(e){ document.getElementById('diag').textContent = '[Voices] '+e.message; }
+}
+if ('speechSynthesis' in window){
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  var u = new SpeechSynthesisUtterance(text);
+  var voices = window.speechSynthesis.getVoices();
+  var chosen = null, wanted = voiceSel ? voiceSel.value : '';
+  for (var i=0;i<voices.length;i++){ if(voices[i].name === wanted){ chosen = voices[i]; break; } }
+  if(!chosen){ for (var i2=0;i2<voices.length;i2++){ if(/Samantha/.test(voices[i2].name)){ chosen=voices[i2]; break; } } }
+  if(!chosen){ for (var i3=0;i3<voices.length;i3++){ if(voices[i3].lang === 'en-US'){ chosen=voices[i3]; break; } } }
+  if(!chosen){ for (var i4=0;i4<voices.length;i4++){ var L=(voices[i4].lang||'').toLowerCase(); if(L.indexOf('en')===0){ chosen=voices[i4]; break; } } }
+  if(!chosen && voices.length) chosen = voices[0];
+  if (chosen){ u.voice=chosen; u.lang = chosen.lang || 'en-US'; } else { u.lang = 'en-US'; }
+  u.rate = parseFloat(rateEl ? rateEl.value : '0.9') || 0.9;
+  u.pitch = parseFloat(pitchEl ? pitchEl.value : '0.9') || 0.9;
+  u.onstart=function(){ txLamp.classList.remove('hidden'); };
+  u.onend=function(){ txLamp.classList.add('hidden'); };
+  try{ window.speechSynthesis.cancel(); }catch(_){}
+  window.speechSynthesis.speak(u);
+}
 
 /* ===== Core ===== */
-const MIN_ALT=3000,MAX_ALT=7500,SPD_MIN=160,SPD_MAX=210;
-const el=id=>document.getElementById(id);
-const h1=el('h1'),h2=el('h2'),h3=el('h3'),a1=el('a1'),a2=el('a2'),s1=el('s1'),s2=el('s2');
-const hdgPreview=el('hdgPreview'),altPreview=el('altPreview'),spdPreview=el('spdPreview');
-const textOut=el('textOut'),blurHint=el('blurHint'),difficultySel=el('difficulty');
-const sayAgainBtn=el('sayAgain'),nextBtn=el('next'),initBtn=el('btnInit'),reinitBtn=el('btnReinit');
-const logList=el('logList');const headingBlock=el('headingBlock'),altBlock=el('altBlock'),speedBlock=el('speedBlock');
-const backdrop=el('backdrop'),sheet=el('sheet'),kpTarget=el('kpTarget'),kpClose=el('kpClose');
-const apprMinBlock=el('apprMinBlock'),apprMaxBlock=el('apprMaxBlock');
-const pmin1=el('pmin1'),pmin2=el('pmin2'),pmin3=el('pmin3'),pmax1=el('pmax1'),pmax2=el('pmax2'),pmax3=el('pmax3');
-const btnApproach=el('btnApproach'),apprVal=el('apprVal'),apprRangeNote=el('apprRangeNote');
+var MIN_ALT=3000, MAX_ALT=7500, SPD_MIN=160, SPD_MAX=210;
+function $(id){ return document.getElementById(id); }
+var h1=$('h1'), h2=$('h2'), h3=$('h3'), a1=$('a1'), a2=$('a2'), s1=$('s1'), s2=$('s2');
+var hdgPreview=$('hdgPreview'), altPreview=$('altPreview'), spdPreview=$('spdPreview');
+var textOut=$('textOut'), blurHint=$('blurHint'), difficultySel=$('difficulty');
+var sayAgainBtn=$('sayAgain'), nextBtn=$('next'), initBtn=$('btnInit'), reinitBtn=$('btnReinit');
+var logList=$('logList'), headingBlock=$('headingBlock'), altBlock=$('altBlock'), speedBlock=$('speedBlock');
+var backdrop=$('backdrop'), sheet=$('sheet'), kpTarget=$('kpTarget'), kpClose=$('kpClose');
+var apprMinBlock=$('apprMinBlock'), apprMaxBlock=$('apprMaxBlock');
+var pmin1=$('pmin1'), pmin2=$('pmin2'), pmin3=$('pmin3'), pmax1=$('pmax1'), pmax2=$('pmax2'), pmax3=$('pmax3');
+var btnApproach=$('btnApproach'), apprVal=$('apprVal'), apprRangeNote=$('apprRangeNote');
 
-let state={difficulty:3,cur_hdg:0,cur_alt:3000,cur_spd:160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
+var state={
+  difficulty:3,
+  cur_hdg:0,
+  cur_alt:3000,
+  cur_spd:160,
+  lastText:"",
+  lastTTS:"",
+  activeInput:null,
+  editSeq:false,
+  order:[h1,h2,h3,a1,a2,s1,s2]
+};
 
-function clampAlt(a){return Math.max(MIN_ALT,Math.min(MAX_ALT,Math.trunc(a)))}
-function clampSpd(s){return Math.max(SPD_MIN,Math.min(SPD_MAX,Math.trunc(s)))}
-function hdgSpdInAviation(n){n=Math.max(0,Math.min(999,Math.trunc(n)));const s=n.toString().padStart(3,'0');const A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];return s.split('').map(ch=>A[parseInt(ch,10)])}
-function altFpmInAviation(v){v=Math.max(0,Math.trunc(v));const A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];const t=Math.floor(v/1000),h=Math.floor((v%1000)/100);const p=[];if(t)p.push(`${A[t]} Thousand`);if(h)p.push(`${A[h]} Hundred`);if(!p.length)p.push(`${A[0]} Hundred`);return p.join(' ')}
-function digitsToInt(...ds){let s=ds.map(x=>(x.value||'0').replace(/\D/g,'').slice(0,1)).join('');return parseInt(s||'0',10)}
-function updatePreviews(){const hdg=(digitsToInt(h1,h2,h3))%360,alt=digitsToInt(a1,a2)*100,spd=digitsToInt(s1,s2)*10;hdgPreview.textContent=`HDG: ${String(hdg).padStart(3,'0')}°`;altPreview.textContent=`ALT: ${alt} ft`;spdPreview.textContent=`SPD: ${spd} kt`}
-function addFocusRing(e){[...state.order,pmin1,pmin2,pmin3,pmax1,pmax2,pmax3].forEach(x=>x&&x.classList.remove('focus-ring'));if(e)e.classList.add('focus-ring')}
-function openKeypad(input){state.activeInput=input;kpTarget.textContent=input.id.toUpperCase();backdrop.style.display='block';sheet.classList.add('show');addFocusRing(input)}
-function closeKeypad(){sheet.classList.remove('show');backdrop.style.display='none';state.activeInput=null;addFocusRing(null)}
-function focusSection(sec){openKeypad(sec==='H'?h1:sec==='A'?a1:s1);state.editSeq=true}
+function clampAlt(a){ a=parseInt(a||0,10); if(a<MIN_ALT)a=MIN_ALT; if(a>MAX_ALT)a=MAX_ALT; return a; }
+function clampSpd(s){ s=parseInt(s||0,10); if(s<SPD_MIN)s=SPD_MIN; if(s>SPD_MAX)s=SPD_MAX; return s; }
+function hdgSpdInAviation(n){ n=Math.max(0,Math.min(999,parseInt(n||0,10))); var s=(''+n).padStart(3,'0'); var A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner']; return [A[parseInt(s[0],10)],A[parseInt(s[1],10)],A[parseInt(s[2],10)]]; }
+function altFpmInAviation(v){ v=Math.max(0,parseInt(v||0,10)); var A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner']; var t=Math.floor(v/1000), h=Math.floor((v%1000)/100); var p=[]; if(t)p.push(A[t]+' Thousand'); if(h)p.push(A[h]+' Hundred'); if(!p.length)p.push(A[0]+' Hundred'); return p.join(' '); }
+function digitsToInt(){ var s=''; for(var i=0;i<arguments.length;i++){ var x=arguments[i]; var v=(x.value||'0').replace(/\D/g,'').slice(0,1); s+=v; } return parseInt(s||'0',10); }
+function updatePreviews(){ var hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10; hdgPreview.textContent='HDG: '+(''+hdg).padStart(3,'0')+'°'; altPreview.textContent='ALT: '+alt+' ft'; spdPreview.textContent='SPD: '+spd+' kt'; }
+function addFocusRing(elm){ var arr=state.order.concat([pmin1,pmin2,pmin3,pmax1,pmax2,pmax3]); for(var i=0;i<arr.length;i++){ if(arr[i]) arr[i].classList.remove('focus-ring'); } if(elm) elm.classList.add('focus-ring'); }
+function openKeypad(inputEl){ state.activeInput=inputEl; kpTarget.textContent=inputEl.id.toUpperCase(); backdrop.style.display='block'; sheet.classList.add('show'); addFocusRing(inputEl); }
+function closeKeypad(){ sheet.classList.remove('show'); backdrop.style.display='none'; state.activeInput=null; addFocusRing(null); }
+function focusSection(section){ var target=(section==='H')?h1:(section==='A')?a1:s1; openKeypad(target); state.editSeq=true; }
 
-headingBlock.addEventListener('click',()=>focusSection('H'));
-altBlock.addEventListener('click',()=>focusSection('A'));
-speedBlock.addEventListener('click',()=>focusSection('S'));
-apprMinBlock.addEventListener('click',e=>{openKeypad((e.target.closest('.digit'))||pmin1);state.editSeq=false});
-apprMaxBlock.addEventListener('click',e=>{openKeypad((e.target.closest('.digit'))||pmax1);state.editSeq=false});
+headingBlock.addEventListener('click',function(){ focusSection('H'); });
+altBlock.addEventListener('click',function(){ focusSection('A'); });
+speedBlock.addEventListener('click',function(){ focusSection('S'); });
+apprMinBlock.addEventListener('click',function(e){ var t=e.target.closest?e.target.closest('.digit'):null; openKeypad(t||pmin1); state.editSeq=false; });
+apprMaxBlock.addEventListener('click',function(e){ var t=e.target.closest?e.target.closest('.digit'):null; openKeypad(t||pmax1); state.editSeq=false; });
 
-sheet.addEventListener('click',e=>{
-  const btn=e.target.closest('.kp-btn'); if(!btn||!state.activeInput) return;
-  const f=btn.dataset.func;
-  if(f==='clear'){state.activeInput.value='';updatePreviews();updateApprNote();return}
-  if(f==='back'){state.activeInput.value='';updatePreviews();updateApprNote();if(state.editSeq){const i=state.order.indexOf(state.activeInput);if(i>0){openKeypad(state.order[i-1])}}else closeKeypad();return}
-  const num=e.target.textContent.trim();
+sheet.addEventListener('click',function(e){
+  var btn=e.target; while(btn && !btn.classList.contains('kp-btn')) btn=btn.parentNode;
+  if(!btn || !state.activeInput) return;
+  var func=btn.getAttribute('data-func');
+  if(func==='clear'){ state.activeInput.value=''; updatePreviews(); updateApprNote(); return; }
+  if(func==='back'){ state.activeInput.value=''; updatePreviews(); updateApprNote();
+    if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx>0) openKeypad(state.order[idx-1]); }
+    else closeKeypad(); return;
+  }
+  var num=(btn.textContent||'').trim();
   if(/^\d$/.test(num)){
-    state.activeInput.value=num;updatePreviews();updateApprNote();
-    if(state.editSeq){const i=state.order.indexOf(state.activeInput);if(i<state.order.length-1){openKeypad(state.order[i+1])}else{state.editSeq=false;closeKeypad()}}
-    else closeKeypad();
+    state.activeInput.value=num; updatePreviews(); updateApprNote();
+    if(state.editSeq){
+      var i=state.order.indexOf(state.activeInput);
+      if(i<state.order.length-1) openKeypad(state.order[i+1]); else { state.editSeq=false; closeKeypad(); }
+    } else closeKeypad();
   }
 });
-backdrop.addEventListener('click',()=>{state.editSeq=false;closeKeypad()});
-kpClose.addEventListener('click',()=>{state.editSeq=false;closeKeypad()});
+backdrop.addEventListener('click',function(){ state.editSeq=false; closeKeypad(); });
+kpClose.addEventListener('click',function(){ state.editSeq=false; closeKeypad(); });
 
-/* === 버튼 이벤트 바인딩 추가 === */
+/* 버튼 이벤트 */
 initBtn.addEventListener('click', doInitialize);
 reinitBtn.addEventListener('click', doReinitialize);
-sayAgainBtn.addEventListener('click', () => { if(state.lastTTS) speak(state.lastTTS) });
+sayAgainBtn.addEventListener('click', function(){ if(state.lastTTS) speak(state.lastTTS); });
 nextBtn.addEventListener('click', emitInstruction);
 
-document.addEventListener('keydown',e=>{
-  const k=e.key;
-  if(k==='n'||k==='N'){e.preventDefault();emitInstruction();return}
-  if(k==='b'||k==='B'){e.preventDefault();if(state.lastTTS)speak(state.lastTTS);return}
-  if(k==='i'||k==='I'){e.preventDefault();doInitialize();return}
-  if(k==='r'||k==='R'){e.preventDefault();doReinitialize();return}
-  if(k==='h'||k==='H'){e.preventDefault();focusSection('H');return}
-  if(k==='a'||k==='A'){e.preventDefault();focusSection('A');return}
-  if(k==='s'||k==='S'){e.preventDefault();focusSection('S');return}
-  if(e.code==='Space'){e.preventDefault();const b=textOut.classList.contains('blurred');if(b){textOut.classList.remove('blurred');blurHint.classList.add('hidden')}else{textOut.classList.add('blurred');blurHint.classList.remove('hidden')}return}
-  const apprSet=new Set([pmin1,pmin2,pmin3,pmax1,pmax2,pmax3]); if(state.activeInput&&apprSet.has(state.activeInput)){e.stopPropagation();return}
-  if(state.activeInput&&/^[0-9]$/.test(k)){e.preventDefault();state.activeInput.value=k;updatePreviews();if(state.editSeq){const i=state.order.indexOf(state.activeInput);if(i<state.order.length-1){openKeypad(state.order[i+1])}else{state.editSeq=false;closeKeypad()}}else closeKeypad()}
-  if(state.activeInput&&k==='Backspace'){e.preventDefault();state.activeInput.value='';updatePreviews()}
+/* 키보드 */
+document.addEventListener('keydown',function(e){
+  var k=e.key;
+  if(k==='n'||k==='N'){ e.preventDefault(); emitInstruction(); return; }
+  if(k==='b'||k==='B'){ e.preventDefault(); if(state.lastTTS) speak(state.lastTTS); return; }
+  if(k==='i'||k==='I'){ e.preventDefault(); doInitialize(); return; }
+  if(k==='r'||k==='R'){ e.preventDefault(); doReinitialize(); return; }
+  if(k==='h'||k==='H'){ e.preventDefault(); focusSection('H'); return; }
+  if(k==='a'||k==='A'){ e.preventDefault(); focusSection('A'); return; }
+  if(k==='s'||k==='S'){ e.preventDefault(); focusSection('S'); return; }
+  if(e.code==='Space'){ e.preventDefault(); var isBlur=textOut.classList.contains('blurred');
+    if(isBlur){ textOut.classList.remove('blurred'); blurHint.classList.add('hidden'); }
+    else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
+    return;
+  }
+  var apprSet=[pmin1,pmin2,pmin3,pmax1,pmax2,pmax3];
+  if(state.activeInput && apprSet.indexOf(state.activeInput)!==-1){ e.stopPropagation(); return; }
+  if(state.activeInput && /^[0-9]$/.test(k)){ e.preventDefault(); state.activeInput.value=k; updatePreviews();
+    if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1) openKeypad(state.order[idx+1]); else { state.editSeq=false; closeKeypad(); } }
+    else closeKeypad(); }
+  if(state.activeInput && k==='Backspace'){ e.preventDefault(); state.activeInput.value=''; updatePreviews(); }
 });
 
-function readInputsToState(){const hdg=digitsToInt(h1,h2,h3)%360,alt=clampAlt(digitsToInt(a1,a2)*100),spd=clampSpd(digitsToInt(s1,s2)*10);state.cur_hdg=hdg;state.cur_alt=alt;state.cur_spd=spd;state.difficulty=parseInt(difficultySel.value,10);document.getElementById('initMsg').textContent='초기화 완료'}
-function doInitialize(){readInputsToState();textOut.textContent='Initialized. Next Instruction을 누르세요.';textOut.classList.add('blurred');blurHint.classList.remove('hidden')}
-function doReinitialize(){doInitialize();textOut.textContent='Reinitialized. Next Instruction을 누르세요.'}
+/* 상태/로직 */
+function readInputsToState(){
+  var hdg=digitsToInt(h1,h2,h3)%360, alt=clampAlt(digitsToInt(a1,a2)*100), spd=clampSpd(digitsToInt(s1,s2)*10);
+  state.cur_hdg=hdg; state.cur_alt=alt; state.cur_spd=spd; state.difficulty=parseInt(difficultySel.value,10);
+  $('initMsg').textContent='초기화 완료';
+}
+function doInitialize(){
+  readInputsToState();
+  textOut.textContent='Initialized. Next Instruction을 누르세요.';
+  textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
+}
+function doReinitialize(){
+  doInitialize();
+  textOut.textContent='Reinitialized. Next Instruction을 누르세요.';
+}
 
-/* === Approach Speed === */
-function readApprMin(){return digitsToInt(pmin1,pmin2,pmin3)||145}
-function readApprMax(){return digitsToInt(pmax1,pmax2,pmax3)||152}
-function updateApprNote(){const mn=readApprMin(),mx=readApprMax();apprRangeNote.textContent=`범위: ${Math.min(mn,mx)}–${Math.max(mn,mx)} kt`}
-function genApproach(){let mn=readApprMin(),mx=readApprMax();if(mn>mx){[mn,mx]=[mx,mn]}const v=Math.floor(Math.random()*(mx-mn+1))+mn;apprVal.textContent=`${v} kt`}
+/* Approach Speed */
+function readApprMin(){ return digitsToInt(pmin1,pmin2,pmin3) || 145; }
+function readApprMax(){ return digitsToInt(pmax1,pmax2,pmax3) || 152; }
+function updateApprNote(){
+  var mn=readApprMin(), mx=readApprMax();
+  var lo=Math.min(mn,mx), hi=Math.max(mn,mx);
+  apprRangeNote.textContent='범위: '+lo+'–'+hi+' kt';
+}
+function genApproach(){
+  var mn=readApprMin(), mx=readApprMax(); if(mn>mx){ var t=mn; mn=mx; mx=t; }
+  var v = Math.floor(Math.random()*(mx-mn+1))+mn;
+  apprVal.textContent = v+' kt';
+}
 btnApproach.addEventListener('click', genApproach);
 
-/* === Instruction === */
+/* Instruction */
 function getInstruction(d,cur_hdg,cur_alt,cur_spd){
-  let turnd=Math.floor(Math.random()*2)+1, target_hdg=cur_hdg, climb_descend=Math.floor(Math.random()*2), target_alt=cur_alt, target_spd=cur_spd, target_fpm=1000;
-  if(cur_alt<=MIN_ALT)climb_descend=1; if(cur_alt>=MAX_ALT)climb_descend=0;
-  if(d===1){target_hdg=(cur_hdg+180)%360;const step=Math.random()<0.5?1000:2000;target_alt=clampAlt(cur_alt+(climb_descend?+step:-step));target_spd=cur_spd;target_fpm=Math.random()<0.5?1000:1500}
-  else if(d===2){target_hdg=(cur_hdg+180)%360;const step=Math.random()<0.5?1000:2000;target_alt=clampAlt(cur_alt+(climb_descend?+step:-step));const dv=Math.random()<0.5?-20:+20;target_spd=clampSpd(cur_spd+dv);target_fpm=Math.random()<0.5?1000:1500}
-  else {let delta5=(Math.floor(Math.random()*27)+10)*5;target_hdg=((cur_hdg+(turnd===1?-delta5:+delta5))%360+360)%360;const up=[1000,1500,2000],down=[1500,2000];const step=(climb_descend?up[Math.floor(Math.random()*up.length)]:down[Math.floor(Math.random()*down.length)]);target_alt=clampAlt(cur_alt+(climb_descend?+step:-step));target_spd=clampSpd(cur_spd+((Math.floor(Math.random()*3)-1)*20));target_fpm=(Math.floor(Math.random()*13)+9)*100;target_hdg=target_hdg-(target_hdg%10)}
-  return [turnd,target_hdg,climb_descend,target_alt,target_spd,target_fpm]
+  var turnd = Math.floor(Math.random()*2)+1;
+  var target_hdg=cur_hdg, climb_descend=Math.floor(Math.random()*2);
+  var target_alt=cur_alt, target_spd=cur_spd, target_fpm=1000;
+  if(cur_alt<=MIN_ALT) climb_descend=1;
+  if(cur_alt>=MAX_ALT) climb_descend=0;
+
+  if(d===1){
+    target_hdg=(cur_hdg+180)%360;
+    var step1=Math.random()<0.5?1000:2000;
+    target_alt=clampAlt(cur_alt+(climb_descend?+step1:-step1));
+    target_spd=cur_spd;
+    target_fpm=Math.random()<0.5?1000:1500;
+  }else if(d===2){
+    target_hdg=(cur_hdg+180)%360;
+    var step2=Math.random()<0.5?1000:2000;
+    target_alt=clampAlt(cur_alt+(climb_descend?+step2:-step2));
+    var dv=Math.random()<0.5?-20:+20;
+    target_spd=clampSpd(cur_spd+dv);
+    target_fpm=Math.random()<0.5?1000:1500;
+  }else{
+    var delta5=(Math.floor(Math.random()*27)+10)*5;
+    target_hdg=((cur_hdg+(turnd===1?-delta5:+delta5))%360+360)%360;
+    var up=[1000,1500,2000], down=[1500,2000];
+    var stepH=(climb_descend?up[Math.floor(Math.random()*up.length)]:down[Math.floor(Math.random()*down.length)]);
+    target_alt=clampAlt(cur_alt+(climb_descend?+stepH:-stepH));
+    target_spd=clampSpd(cur_spd+((Math.floor(Math.random()*3)-1)*20));
+    target_fpm=(Math.floor(Math.random()*13)+9)*100;
+    target_hdg=target_hdg-(target_hdg%10);
+  }
+  return [turnd,target_hdg,climb_descend,target_alt,target_spd,target_fpm];
 }
 function emitInstruction(){
-  if(state.lastText){const item=document.createElement('div');item.className='log-item mono';item.textContent=state.lastText;logList.prepend(item)}
-  let [t,hdg,cd,alt,spd,fpm]=getInstruction(state.difficulty,state.cur_hdg,state.cur_alt,state.cur_spd);hdg=((hdg%360)+360)%360;
-  const text=`Korean air one two three tango, Turn ${t===1?'Left':'Right'} heading ${String(hdg).padStart(3,'0')}, ${cd===0?'Descend and maintain ':'Climb and Maintain '}${alt} Speed ${spd} Rate ${fpm}`;
-  const ha=hdgSpdInAviation(hdg),sa=hdgSpdInAviation(spd);
-  const tts=`Korean air one two three tango, Turn ${t===1?'Left':'Right'} heading ${ha[0]}${ha[1]}${ha[2]}, ${cd===0?'Descend and maintain ':'Climb and Maintain '}${altFpmInAviation(alt)}, Speed ${sa[0]}${sa[1]}${sa[2]}, Rate ${altFpmInAviation(fpm)}`;
-  state.lastText=text;state.lastTTS=tts;state.cur_hdg=hdg;state.cur_alt=alt;state.cur_spd=spd;textOut.textContent=text;textOut.classList.add('blurred');blurHint.classList.remove('hidden');speak(tts)
+  if(state.lastText){
+    var item=document.createElement('div'); item.className='log-item mono'; item.textContent=state.lastText; logList.prepend(item);
+  }
+  var out=getInstruction(state.difficulty,state.cur_hdg,state.cur_alt,state.cur_spd);
+  var turnd=out[0], target_hdg=out[1], climbdescend=out[2], target_alt=out[3], target_spd=out[4], target_fpm=out[5];
+  target_hdg=((target_hdg%360)+360)%360;
+
+  var text='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+' heading '+(''+target_hdg).padStart(3,'0')+', '+(climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+target_alt+' Speed '+target_spd+' Rate '+target_fpm;
+  var ha=hdgSpdInAviation(target_hdg), sa=hdgSpdInAviation(target_spd);
+  var tts='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+' heading '+ha[0]+ha[1]+ha[2]+', '+(climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+altFpmInAviation(target_alt)+', Speed '+sa[0]+sa[1]+sa[2]+', Rate '+altFpmInAviation(target_fpm);
+
+  state.lastText=text; state.lastTTS=tts;
+  state.cur_hdg=target_hdg; state.cur_alt=target_alt; state.cur_spd=target_spd;
+
+  textOut.textContent=text; textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
+  speak(tts);
 }
 
-/* === 기본값 === */
-function setDefaultInputs(hdg=330,alt=3000,spd=170){const h=String(hdg).padStart(3,'0');h1.value=h[0];h2.value=h[1];h3.value=h[2];const a=String(Math.round(alt/100)).padStart(2,'0');a1.value=a[0];a2.value=a[1];const s=String(Math.round(spd/10)).padStart(2,'0');s1.value=s[0];s2.value=s[1];updatePreviews()}
-function setDefaultApproach(minv=145,maxv=152){const mn=String(minv).padStart(3,'0');pmin1.value=mn[0];pmin2.value=mn[1];pmin3.value=mn[2];const mx=String(maxv).padStart(3,'0');pmax1.value=mx[0];pmax2.value=mx[1];pmax3.value=mx[2];updateApprNote()}
-setDefaultInputs(330,3000,170);setDefaultApproach(145,152);textOut.textContent='숫자를 입력한 뒤 Initialize(I/R) 또는 Next(N)를 사용하세요. Approach 범위는 카드에서 팝업 키패드로 조정.';
+/* 기본값 */
+function setDefaultInputs(hdg,alt,spd){
+  hdg = (typeof hdg==='number')?hdg:330;
+  alt = (typeof alt==='number')?alt:3000;
+  spd = (typeof spd==='number')?spd:170;
+  var h=(''+hdg).padStart(3,'0'); h1.value=h[0]; h2.value=h[1]; h3.value=h[2];
+  var a=(''+Math.round(alt/100)).padStart(2,'0'); a1.value=a[0]; a2.value=a[1];
+  var s=(''+Math.round(spd/10)).padStart(2,'0'); s1.value=s[0]; s2.value=s[1];
+  updatePreviews();
+}
+function setDefaultApproach(minv,maxv){
+  minv=(typeof minv==='number')?minv:145; maxv=(typeof maxv==='number')?maxv:152;
+  var mn=(''+minv).padStart(3,'0'); pmin1.value=mn[0]; pmin2.value=mn[1]; pmin3.value=mn[2];
+  var mx=(''+maxv).padStart(3,'0'); pmax1.value=mx[0]; pmax2.value=mx[1]; pmax3.value=mx[2];
+  updateApprNote();
+}
+setDefaultInputs(330,3000,170);
+setDefaultApproach(145,152);
+textOut.textContent='숫자를 입력한 뒤 Initialize(I/R) 또는 Next(N)를 사용하세요. Approach 범위는 카드에서 팝업 키패드로 조정.';
 
-/* === PWA SW 등록(선택) === */
-if('serviceWorker'in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js')})}
+/* PWA SW (원하면 주석 해제). 캐시 문제 있으면 강력 새로고침 필수 */
+// if ('serviceWorker' in navigator){
+//   window.addEventListener('load', function(){ navigator.serviceWorker.register('./service-worker.js?v=4'); });
+// }
 </script>
 </body>
 </html>
