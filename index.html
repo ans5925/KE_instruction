@@ -164,34 +164,78 @@ const rateEl = document.getElementById('rate');
 const pitchEl = document.getElementById('pitch');
 const txLamp = document.getElementById('txLamp');
 
-function loadVoices(){
+function loadVoices() {
   const vs = window.speechSynthesis.getVoices();
+  const prev = voiceSel.value; // 사용자 선택 기억
+
   voiceSel.innerHTML = '';
-  vs.filter(v => /en/i.test(v.lang)).forEach(v => {
-    const o = document.createElement('option');
-    o.value = v.name; o.textContent = v.name + ' (' + v.lang + ')';
-    voiceSel.appendChild(o);
+  vs.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = `${v.name} (${v.lang})`;
+    voiceSel.appendChild(opt);
   });
-  // Try pick a Google voice on Chrome
-  const prefer = Array.from(voiceSel.options).find(o => /Google US English|Google.*English|en-US|en-GB/i.test(o.textContent));
-  if (prefer) voiceSel.value = prefer.value;
+
+  // 1) 이전 선택이 여전히 존재하면 유지
+  if (prev && Array.from(voiceSel.options).some(o => o.value === prev)) {
+    voiceSel.value = prev;
+    return;
+  }
+
+  // 2) 초기 기본: Samantha → en-US → en-* → 첫번째
+  const samantha = Array.from(voiceSel.options).find(o => /Samantha/.test(o.value));
+  if (samantha) { voiceSel.value = samantha.value; return; }
+
+  const enUS = Array.from(voiceSel.options).find(o => /\(en-US\)/.test(o.textContent));
+  if (enUS) { voiceSel.value = enUS.value; return; }
+
+  const engAny = Array.from(voiceSel.options).find(o => /\(en-/.test(o.textContent));
+  if (engAny) { voiceSel.value = engAny.value; return; }
+
+  if (voiceSel.options.length) voiceSel.selectedIndex = 0;
 }
-if ('speechSynthesis' in window){
+
+if ('speechSynthesis' in window) {
   loadVoices();
   window.speechSynthesis.onvoiceschanged = loadVoices;
 }
 
-function speak(text){
-  if(!('speechSynthesis' in window)) return;
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+
   const u = new SpeechSynthesisUtterance(text);
   const voices = window.speechSynthesis.getVoices();
-  const chosen = voices.find(v => v.name === voiceSel.value) || voices.find(v=>/en/i.test(v.lang));
-  if (chosen) u.voice = chosen;
-  u.lang = (chosen && chosen.lang) || 'en-US';
-  u.rate = parseFloat(rateEl.value || '1.0');
-  u.pitch = parseFloat(pitchEl.value || '1.0');
+
+  // 1) 사용자가 드롭다운에서 고른 값 우선
+  let chosen = voices.find(v => v.name === (voiceSel?.value || ''));
+
+  // 2) 없으면 Samantha
+  if (!chosen) chosen = voices.find(v => v.name.includes('Samantha'));
+
+  // 3) 없으면 en-US
+  if (!chosen) chosen = voices.find(v => v.lang === 'en-US');
+
+  // 4) 없으면 en-*
+  if (!chosen) chosen = voices.find(v => v.lang?.toLowerCase().startsWith('en'));
+
+  // 5) 최종 폴백
+  if (!chosen && voices.length) chosen = voices[0];
+
+  if (chosen) {
+    u.voice = chosen;
+    u.lang  = chosen.lang || 'en-US';
+  } else {
+    u.lang = 'en-US';
+  }
+
+  // 기본값 0.9 (슬라이더 없으면 0.9 사용)
+  u.rate  = parseFloat(rateEl?.value || '0.9');
+  u.pitch = parseFloat(pitchEl?.value || '0.9');
+
   u.onstart = () => txLamp.classList.remove('hidden');
-  u.onend = () => txLamp.classList.add('hidden');
+  u.onend   = () => txLamp.classList.add('hidden');
+
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
