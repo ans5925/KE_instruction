@@ -3,16 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>ATC Drill (PWA v3, compat)</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>ATC Drill v1.1 · 250822</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#111111">
 <style>
   :root{--gap:12px}
   *{box-sizing:border-box}
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:16px;line-height:1.35;background:#f7f7f9}
-  h1{font-size:18px;margin:0 0 8px}
+  h1{font-size:18px;margin:0 0 6px}
+  small.muted{font-size:12px;color:#7a7a7a}
   .card{background:#fff;border:1px solid #e6e6ea;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .col{display:flex;flex-direction:column;gap:6px}
@@ -26,8 +25,7 @@
   button:active{transform:scale(0.98)}
   .primary{background:#111;color:#fff;border-color:#111}
   .danger{background:#ff3b30;color:#fff;border-color:#ff3b30}
-  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
-  .muted{color:#666}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   .grid{display:grid;grid-template-columns:1fr;gap:12px}
   @media (min-width:920px){ .grid{grid-template-columns:1fr 1fr} }
   .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #ddd;border-radius:999px;font-size:12px;color:#555}
@@ -50,7 +48,7 @@
   .control{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   select, input[type="range"]{padding:6px;border:1px solid #d0d0d8;border-radius:10px}
 
-  /* --- Approach Generator 스타일 --- */
+  /* Approach Generator */
   .approach-wrap{display:flex;flex-direction:column;gap:10px}
   .ap-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
   .ap-box{flex:0 0 auto}
@@ -61,21 +59,39 @@
   .ap-big small{font-size:14px;font-weight:600;opacity:.9;margin-left:6px}
   .ap-range{font-size:13px;color:#666;margin-left:6px}
   .ap-value{font-size:28px;font-weight:800}
-  #diag{margin-top:10px;font-size:12px;color:#b00020}
+
+  /* Floating buttons */
+  .fab-switch{display:flex;align-items:center;gap:8px}
+  .switch{position:relative;width:44px;height:24px}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#d5d5db;border-radius:999px;transition:.2s}
+  .slider:before{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s}
+  .switch input:checked + .slider{background:#111}
+  .switch input:checked + .slider:before{transform:translateX(20px)}
+  .fab-wrap{position:fixed;right:14px;bottom:16px;display:none;flex-direction:column;gap:10px;z-index:1500}
+  .fab{min-width:56px;min-height:56px;border-radius:999px;border:0;color:#fff;background:#111;font-weight:700;box-shadow:0 8px 18px rgba(0,0,0,.25);font-size:16px}
+  .fab.secondary{background:#2f2f35}
+  .fab.red{background:#ff3b30}
 </style>
 </head>
 <body>
   <div class="card">
     <div class="row" style="justify-content:space-between;">
       <div>
-        <h1>ATC Drill (PWA v3)</h1>
-        <div class="muted">H/A/S 이동 · N(Next)/B(Say again)/I(Init)/R(Reinit) · <b>Space</b>=Instruction 토글 · <b>G</b>=Approach Generate</div>
+        <h1>ATC Drill v1.1 · <small class="muted">250822</small></h1>
+        <small class="muted">단축키: N/B/I/R/H/A/S/Space, G=Approach Generate</small>
       </div>
       <div class="control">
         <label class="label">Voice <select id="voiceSel"></select></label>
-        <label class="label">Rate <input type="range" id="rate" min="0.6" max="1.5" step="0.01" value="0.9"></label>
-        <label class="label">Pitch <input type="range" id="pitch" min="0.6" max="1.4" step="0.01" value="0.9"></label>
+        <span class="label">Rate <input type="range" id="rate" min="0.6" max="1.5" step="0.01" value="0.9"></span>
+        <span class="label">Pitch <input type="range" id="pitch" min="0.6" max="1.4" step="0.01" value="0.9"></span>
         <span id="txLamp" class="pill hidden tx">TX</span>
+        <div class="fab-switch">
+          <span class="label">Floating</span>
+          <label class="switch">
+            <input id="fabToggle" type="checkbox"><span class="slider"></span>
+          </label>
+        </div>
       </div>
     </div>
   </div>
@@ -90,6 +106,7 @@
             <option value="1">1 - Easy (±1000/2000ft, SPD 유지, 180° turn, 1000/1500FPM)</option>
             <option value="2">2 - Normal (±1000/2000ft, SPD ±20kt, 180° turn, 1000/1500FPM)</option>
             <option value="3" selected>3 - Hard (가변 규칙, 상승 1000/1500/2000)</option>
+            <option value="4">4 - Extreme (HDG 5°, ALT 100ft·≤15000, ΔALT 1500~3000/100, SPD 5kt, FPM 500~3000/100)</option>
           </select>
         </div>
       </div>
@@ -136,10 +153,12 @@
         <button id="sayAgain">Say Again <span class="hint">B</span></button>
         <button id="next" class="primary">Next Instruction <span class="hint">N</span></button>
       </div>
-      <div class="card blur-wrap" style="margin-top:14px">
+
+      <!-- 터치로 토글 가능 -->
+      <div id="instCard" class="card blur-wrap" style="margin-top:14px">
         <div class="label">Instruction (현재) <span class="hint">Space</span></div>
         <div id="textOut" class="mono blurred" style="white-space:pre-wrap;font-size:15px"></div>
-        <div id="blurHint" class="blur-hint">터치 또는 Space로 보기</div>
+        <div id="blurHint" class="blur-hint">터치로 보기 / 다시 터치로 숨기기</div>
       </div>
 
       <div class="card" style="margin-top:14px">
@@ -147,7 +166,7 @@
         <div id="logList"></div>
       </div>
 
-      <!-- Approach Speed Generator (개선) -->
+      <!-- Approach Speed Generator -->
       <div class="card" style="margin-top:14px">
         <div class="label">Approach Speed Generator <span class="ap-chip">기본 145–152 kt</span></div>
         <div class="approach-wrap">
@@ -170,7 +189,8 @@
               </div>
             </div>
             <div class="ap-box" style="margin-left:auto">
-              <button id="btnApproach" class="ap-big">Generate <small>G</small></button><span class="ap-range" id="apprRangeNote">범위: 145–152 kt</span>
+              <button id="btnApproach" class="ap-big">Generate <small>G</small></button>
+              <span class="ap-range" id="apprRangeNote">범위: 145–152 kt</span>
             </div>
           </div>
           <div class="ap-row">
@@ -178,11 +198,19 @@
             <div class="ap-value mono" id="apprVal">—</div>
           </div>
         </div>
-        <div class="note">* 이 범위는 위 툴과 독립적입니다. 숫자 입력은 팝업 키패드로만 가능합니다.</div>
       </div>
 
-      <div id="diag"></div>
+      <div id="diag" class="note"></div>
     </div>
+  </div>
+
+  <!-- Floating buttons -->
+  <div id="fabWrap" class="fab-wrap">
+    <button id="fabNext" class="fab">N</button>
+    <button id="fabSay" class="fab secondary">B</button>
+    <button id="fabGen" class="fab secondary">G</button>
+    <button id="fabInit" class="fab secondary">I</button>
+    <button id="fabRe" class="fab red">R</button>
   </div>
 
   <!-- Keypad -->
@@ -214,7 +242,6 @@ var voiceSel=document.getElementById('voiceSel');
 var rateEl=document.getElementById('rate');
 var pitchEl=document.getElementById('pitch');
 var txLamp=document.getElementById('txLamp');
-
 function loadVoices(){
   try{
     var vs=window.speechSynthesis?window.speechSynthesis.getVoices():[];
@@ -229,7 +256,6 @@ function loadVoices(){
   }catch(e){ document.getElementById('diag').textContent='[Voices] '+e.message; }
 }
 if('speechSynthesis' in window){ loadVoices(); window.speechSynthesis.onvoiceschanged=loadVoices; }
-
 function speak(text){
   if(!('speechSynthesis' in window)) return;
   var u=new SpeechSynthesisUtterance(text);
@@ -249,24 +275,23 @@ function speak(text){
 }
 
 /* ===== Core ===== */
-var MIN_ALT=3000, MAX_ALT=7500, SPD_MIN=160, SPD_MAX=210;
+var MIN_ALT=3000, MAX_ALT=15000, SPD_MIN=160, SPD_MAX=210;
 function $(id){ return document.getElementById(id); }
 var h1=$('h1'),h2=$('h2'),h3=$('h3'),a1=$('a1'),a2=$('a2'),s1=$('s1'),s2=$('s2');
 var hdgPreview=$('hdgPreview'),altPreview=$('altPreview'),spdPreview=$('spdPreview');
 var textOut=$('textOut'),blurHint=$('blurHint'),difficultySel=$('difficulty');
 var sayAgainBtn=$('sayAgain'),nextBtn=$('next'),initBtn=$('btnInit'),reinitBtn=$('btnReinit');
 var logList=$('logList'),headingBlock=$('headingBlock'),altBlock=$('altBlock'),speedBlock=$('speedBlock');
+var instCard=$('instCard');
 var backdrop=$('backdrop'),sheet=$('sheet'),kpTarget=$('kpTarget'),kpClose=$('kpClose');
 var apprMinBlock=$('apprMinBlock'),apprMaxBlock=$('apprMaxBlock');
 var pmin1=$('pmin1'),pmin2=$('pmin2'),pmin3=$('pmin3'),pmax1=$('pmax1'),pmax2=$('pmax2'),pmax3=$('pmax3');
 var btnApproach=$('btnApproach'),apprVal=$('apprVal'),apprRangeNote=$('apprRangeNote');
+var fabToggle=$('fabToggle'),fabWrap=$('fabWrap');
+var fabNext=$('fabNext'),fabSay=$('fabSay'),fabGen=$('fabGen'),fabInit=$('fabInit'),fabRe=$('fabRe');
 
 var state={difficulty:3,cur_hdg:0,cur_alt:3000,cur_spd:160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
-
-/* --- Approach용 시퀀스 제어 --- */
-var approachSeq=false;
-var approachOrder=[];    // [pmin1,pmin2,pmin3] 또는 [pmax1,pmax2,pmax3]
-
+var approachSeq=false, approachOrder=[];
 function clampAlt(a){ a=parseInt(a||0,10); if(a<MIN_ALT)a=MIN_ALT; if(a>MAX_ALT)a=MAX_ALT; return a; }
 function clampSpd(s){ s=parseInt(s||0,10); if(s<SPD_MIN)s=SPD_MIN; if(s>SPD_MAX)s=SPD_MAX; return s; }
 function hdgSpdInAviation(n){ n=Math.max(0,Math.min(999,parseInt(n||0,10))); var s=(''+n).padStart(3,'0'); var A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner']; return [A[parseInt(s[0],10)],A[parseInt(s[1],10)],A[parseInt(s[2],10)]]; }
@@ -278,6 +303,13 @@ function openKeypad(inputEl){ state.activeInput=inputEl; kpTarget.textContent=in
 function closeKeypad(){ sheet.classList.remove('show'); backdrop.style.display='none'; state.activeInput=null; addFocusRing(null); state.editSeq=false; approachSeq=false; approachOrder=[]; }
 function focusSection(section){ var target=(section==='H')?h1:(section==='A')?a1:s1; openKeypad(target); state.editSeq=true; }
 
+/* 터치로 Instruction 보기/숨기기 */
+instCard.addEventListener('click',function(){
+  var isBlur=textOut.classList.contains('blurred');
+  if(isBlur){ textOut.classList.remove('blurred'); blurHint.classList.add('hidden'); }
+  else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
+});
+
 headingBlock.addEventListener('click',function(){ focusSection('H'); });
 altBlock.addEventListener('click',function(){ focusSection('A'); });
 speedBlock.addEventListener('click',function(){ focusSection('S'); });
@@ -285,13 +317,11 @@ speedBlock.addEventListener('click',function(){ focusSection('S'); });
 /* Min/Max: 3자리 모두 입력 전까지 팝업 유지 */
 apprMinBlock.addEventListener('click',function(e){
   var t=e.target && e.target.classList && e.target.classList.contains('digit') ? e.target : pmin1;
-  approachSeq=true; approachOrder=[pmin1,pmin2,pmin3];
-  openKeypad(t);
+  approachSeq=true; approachOrder=[pmin1,pmin2,pmin3]; openKeypad(t);
 });
 apprMaxBlock.addEventListener('click',function(e){
   var t=e.target && e.target.classList && e.target.classList.contains('digit') ? e.target : pmax1;
-  approachSeq=true; approachOrder=[pmax1,pmax2,pmax3];
-  openKeypad(t);
+  approachSeq=true; approachOrder=[pmax1,pmax2,pmax3]; openKeypad(t);
 });
 
 sheet.addEventListener('click',function(e){
@@ -302,32 +332,31 @@ sheet.addEventListener('click',function(e){
   if(func==='back'){ state.activeInput.value=''; updatePreviews(); updateApprNote();
     if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx>0) openKeypad(state.order[idx-1]); else closeKeypad(); }
     else if(approachSeq){ var idxx=approachOrder.indexOf(state.activeInput); if(idxx>0) openKeypad(approachOrder[idxx-1]); else closeKeypad(); }
-    else closeKeypad();
-    return;
+    else closeKeypad(); return;
   }
   var num=(btn.textContent||'').trim();
   if(/^\d$/.test(num)){
     state.activeInput.value=num; updatePreviews(); updateApprNote();
-    if(state.editSeq){
-      var i=state.order.indexOf(state.activeInput);
-      if(i<state.order.length-1) openKeypad(state.order[i+1]); else closeKeypad();
-    } else if (approachSeq){
-      var j=approachOrder.indexOf(state.activeInput);
-      if(j<approachOrder.length-1) openKeypad(approachOrder[j+1]); else closeKeypad();
-    } else {
-      closeKeypad();
-    }
+    if(state.editSeq){ var i=state.order.indexOf(state.activeInput); if(i<state.order.length-1) openKeypad(state.order[i+1]); else closeKeypad(); }
+    else if(approachSeq){ var j=approachOrder.indexOf(state.activeInput); if(j<approachOrder.length-1) openKeypad(approachOrder[j+1]); else closeKeypad(); }
+    else closeKeypad();
   }
 });
 backdrop.addEventListener('click',function(){ closeKeypad(); });
 kpClose.addEventListener('click',function(){ closeKeypad(); });
 
-/* 버튼 이벤트 */
-$('btnInit').addEventListener('click', doInitialize);
-$('btnReinit').addEventListener('click', doReinitialize);
-$('sayAgain').addEventListener('click', function(){ if(state.lastTTS) speak(state.lastTTS); });
-$('next').addEventListener('click', emitInstruction);
-$('btnApproach').addEventListener('click', function(){ genApproach(true); });
+/* 버튼 + FAB 이벤트 */
+initBtn.addEventListener('click', doInitialize);
+reinitBtn.addEventListener('click', doReinitialize);
+sayAgainBtn.addEventListener('click', function(){ if(state.lastTTS) speak(state.lastTTS); });
+nextBtn.addEventListener('click', emitInstruction);
+btnApproach.addEventListener('click', function(){ genApproach(true); });
+fabToggle.addEventListener('change',function(){ fabWrap.style.display=this.checked?'flex':'none'; });
+fabNext.onclick=function(){ emitInstruction(); };
+fabSay.onclick=function(){ if(state.lastTTS) speak(state.lastTTS); };
+fabGen.onclick=function(){ genApproach(true); };
+fabInit.onclick=function(){ doInitialize(); };
+fabRe.onclick=function(){ doReinitialize(); };
 
 /* 키보드 */
 document.addEventListener('keydown',function(e){
@@ -339,16 +368,14 @@ document.addEventListener('keydown',function(e){
   if(k==='h'||k==='H'){ e.preventDefault(); focusSection('H'); return; }
   if(k==='a'||k==='A'){ e.preventDefault(); focusSection('A'); return; }
   if(k==='s'||k==='S'){ e.preventDefault(); focusSection('S'); return; }
-  if(k==='g'||k==='G'){ e.preventDefault(); genApproach(true); return; } /* G키로 생성 + TTS */
+  if(k==='g'||k==='G'){ e.preventDefault(); genApproach(true); return; }
   if(e.code==='Space'){ e.preventDefault(); var isBlur=textOut.classList.contains('blurred');
     if(isBlur){ textOut.classList.remove('blurred'); blurHint.classList.add('hidden'); }
     else{ textOut.classList.add('blurred'); blurHint.classList.remove('hidden'); }
     return;
   }
-  /* 어프로치 필드는 키보드 입력 금지 */
   var apprSet=[pmin1,pmin2,pmin3,pmax1,pmax2,pmax3];
   if(state.activeInput && apprSet.indexOf(state.activeInput)!==-1){ e.stopPropagation(); return; }
-  /* 일반 입력: 숫자 */
   if(state.activeInput && /^[0-9]$/.test(k)){ e.preventDefault(); state.activeInput.value=k; updatePreviews();
     if(state.editSeq){ var idx=state.order.indexOf(state.activeInput); if(idx<state.order.length-1) openKeypad(state.order[idx+1]); else closeKeypad(); }
     else closeKeypad(); }
@@ -372,6 +399,11 @@ function doReinitialize(){
 }
 
 /* ---- Approach Speed ---- */
+function digitsAvi(n){
+  var s=(''+n).replace(/\D/g,'').padStart(3,'0');
+  var A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];
+  return A[parseInt(s[0],10)]+' '+A[parseInt(s[1],10)]+' '+A[parseInt(s[2],10)];
+}
 function readApprMin(){ return digitsToInt(pmin1,pmin2,pmin3) || 145; }
 function readApprMax(){ return digitsToInt(pmax1,pmax2,pmax3) || 152; }
 function updateApprNote(){
@@ -379,20 +411,11 @@ function updateApprNote(){
   var lo=Math.min(mn,mx), hi=Math.max(mn,mx);
   apprRangeNote.textContent='범위: '+lo+'–'+hi+' kt';
 }
-
-function digitsAvi(n){
-  var s = (''+n).replace(/\D/g,'').padStart(3,'0');
-  var A = ['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];
-  return A[parseInt(s[0],10)]+' '+A[parseInt(s[1],10)]+' '+A[parseInt(s[2],10)];
-}
-  
 function genApproach(doTTS){
   var mn=readApprMin(), mx=readApprMax(); if(mn>mx){ var t=mn; mn=mx; mx=t; }
   var v = Math.floor(Math.random()*(mx-mn+1))+mn;
   apprVal.textContent = v+' kt';
-  if(doTTS){ 
-    var w = digitsAvi(v); // "One Four Two"
-    speak('Approach Speed '+w+' knots, Approach Speed '+w+' knots'); }
+  if(doTTS){ var w=digitsAvi(v); speak('Approach Speed '+w+' knots, Approach Speed '+w+' knots'); }
 }
 updateApprNote();
 
@@ -404,20 +427,20 @@ function getInstruction(d,cur_hdg,cur_alt,cur_spd){
   if(cur_alt<=MIN_ALT) climb_descend=1;
   if(cur_alt>=MAX_ALT) climb_descend=0;
 
-  if(d===1){
+  if(d===1){ // Easy
     target_hdg=(cur_hdg+180)%360;
     var step1=Math.random()<0.5?1000:2000;
     target_alt=clampAlt(cur_alt+(climb_descend?+step1:-step1));
     target_spd=cur_spd;
     target_fpm=Math.random()<0.5?1000:1500;
-  }else if(d===2){
+  }else if(d===2){ // Normal
     target_hdg=(cur_hdg+180)%360;
     var step2=Math.random()<0.5?1000:2000;
     target_alt=clampAlt(cur_alt+(climb_descend?+step2:-step2));
     var dv=Math.random()<0.5?-20:+20;
     target_spd=clampSpd(cur_spd+dv);
     target_fpm=Math.random()<0.5?1000:1500;
-  }else{
+  }else if(d===3){ // Hard
     var delta5=(Math.floor(Math.random()*27)+10)*5;
     target_hdg=((cur_hdg+(turnd===1?-delta5:+delta5))%360+360)%360;
     var up=[1000,1500,2000], down=[1500,2000];
@@ -426,6 +449,24 @@ function getInstruction(d,cur_hdg,cur_alt,cur_spd){
     target_spd=clampSpd(cur_spd+((Math.floor(Math.random()*3)-1)*20));
     target_fpm=(Math.floor(Math.random()*13)+9)*100;
     target_hdg=target_hdg-(target_hdg%10);
+  }else{ // Extreme
+    // Heading: 5deg grid
+    var d5=(Math.floor(Math.random()*36)+2)*5; // 10°~190° in 5°
+    target_hdg=((cur_hdg+(turnd===1?-d5:+d5))%360+360)%360;
+    target_hdg=target_hdg - (target_hdg%5); // snap to 5°
+    // Altitude change: 1500~3000 by 100
+    var stepList=[]; for(var s=1500;s<=3000;s+=100) stepList.push(s);
+    var stepA=stepList[Math.floor(Math.random()*stepList.length)];
+    target_alt=clampAlt(cur_alt+(climb_descend?+stepA:-stepA));
+    // Speed: 5 kt step within 160~210
+    var spdChoices=[-10,-5,0,+5,+10];
+    var dv5=spdChoices[Math.floor(Math.random()*spdChoices.length)];
+    target_spd=clampSpd(cur_spd+dv5);
+    target_spd = target_spd - (target_spd%5);
+    // FPM: 500~3000 by 100
+    target_fpm = (Math.floor(Math.random()*26)+5)*100; // 500..3000
+    // Alt 100ft grid
+    target_alt = target_alt - (target_alt%100);
   }
   return [turnd,target_hdg,climb_descend,target_alt,target_spd,target_fpm];
 }
@@ -464,13 +505,7 @@ function setDefaultApproach(minv,maxv){
 }
 setDefaultInputs(330,3000,170);
 setDefaultApproach(145,152);
-textOut.textContent='숫자를 입력한 뒤 Initialize(I/R) 또는 Next(N)를 사용하세요. Approach 범위는 카드에서 팝업 키패드로 조정.';
-
-/* PWA SW 등록은 필요 시 사용하세요
-if('serviceWorker' in navigator){
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('./service-worker.js?v=5'); });
-}
-*/
+textOut.textContent='숫자 입력 후 Initialize(I/R) 또는 Next(N). Approach 범위는 카드에서 팝업 키패드로 조정.';
 </script>
 </body>
 </html>
