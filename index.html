@@ -521,7 +521,7 @@ function updateLogSummary(){
 /* ---- 문장 생성(A/B) + 발화 ---- */
 function digitsPronounce(num, digits){
   const A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner'];
-  let s = (''+num).padStart(digits,'0'); // 지정된 자리수로 padStart
+  let s = (''+num).padStart(digits,'0');
   return s.split('').map(d => A[parseInt(d,10)]).join(' ');
 }
 
@@ -538,30 +538,34 @@ function emitInstruction(){
     var turnWord = turnd===1?'left':'right';
     var climbWord = climbdescend===1?'climb to ':'descend to ';
     var spdPhrase;
-    if (spd>state.cur_spd) spdPhrase='increase speed to '+spd+' kts';
-    else if (spd<state.cur_spd) spdPhrase='decrease speed to '+spd+' kts';
-    else spdPhrase='speed '+spd+' kts';
+    if (spd>state.cur_spd) spdPhrase='increase speed to '+spd+' knots';
+    else if (spd<state.cur_spd) spdPhrase='decrease speed to '+spd+' knots';
+    else spdPhrase='speed '+spd+' knots';
     var bank = Math.random()<0.5 ? 25 : 30;
 
+    // 텍스트 그대로 (화면 표시)
     text = 'Korean air one two three tango, '+
            'turn '+turnWord+' heading '+(''+hdg).padStart(3,'0')+', '+
            climbWord+alt.toLocaleString()+', '+
            'with '+fpm.toLocaleString()+' fpm, '+
            spdPhrase+', with '+bank+' degrees bank';
 
+    // 음성 (heading, speed만 세 자리 발음, fpm은 일반적으로)
     tts = 'Korean air one two three tango, '+
           'turn '+turnWord+' heading '+digitsPronounce(hdg,3)+', '+
           climbWord+alt.toLocaleString()+', '+
-          'with '+digitsPronounce(fpm,4)+' fpm, '+   // fpm도 각 백단위 발음 원하면 유지
+          'with '+altFpmInAviation(fpm)+' fpm, '+
           spdPhrase.replace(/\d+/, d => digitsPronounce(parseInt(d),3))+', '+
           'with '+bank+' degrees bank';
 
   } else { // Mode B
+    // 화면 표시
     text='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+
          ' heading '+(''+hdg).padStart(3,'0')+
          ', '+(climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+alt+
          ' Speed '+spd+' Rate '+fpm;
 
+    // 음성 (heading, speed는 세 자리 발음 / fpm은 altFpmInAviation)
     tts='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+
         ' heading '+digitsPronounce(hdg,3)+', '+
         (climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+altFpmInAviation(alt)+
@@ -571,7 +575,8 @@ function emitInstruction(){
   state.lastText=text; state.lastTTS=tts;
   state.cur_hdg=hdg; state.cur_alt=alt; state.cur_spd=spd;
 
-  textOut.textContent=text; textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
+  textOut.textContent=text;
+  textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
   speak(tts);
 }
 
