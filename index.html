@@ -21,7 +21,7 @@
   .digit{width:54px;height:58px;border:1px solid #d7d7de;border-radius:12px;font-size:24px;text-align:center;background:#fff;cursor:pointer}
   .focus-ring{outline:2px solid #3182f6;border-color:#3182f6}
   .note{font-size:12px;color:#777}
-  button{padding:12px 14px;border:1px solid #d0d0d8;border-radius:12px;background:#fff;cursor:pointer}
+  button{padding:10px 12px;border:1px solid #d0d0d8;border-radius:12px;background:#fff;cursor:pointer}
   button:active{transform:scale(0.98)}
   .primary{background:#111;color:#fff;border-color:#111}
   .danger{background:#ff3b30;color:#fff;border-color:#ff3b30}
@@ -52,6 +52,12 @@
   .log-summary{margin-top:8px;border-top:1px solid #eee;padding-top:8px;display:flex;gap:10px;flex-wrap:wrap}
   .control{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   select, input[type="range"]{padding:6px;border:1px solid #d0d0d8;border-radius:10px}
+
+  /* Mode toggle buttons */
+  .seg{display:inline-flex;border:1px solid #d0d0d8;border-radius:12px;overflow:hidden}
+  .seg button{border:0;border-right:1px solid #d0d0d8;background:#f6f6f8}
+  .seg button:last-child{border-right:0}
+  .seg .active{background:#111;color:#fff}
 
   /* Approach Generator */
   .approach-wrap{display:flex;flex-direction:column;gap:10px}
@@ -102,7 +108,7 @@
   </div>
 
   <div class="grid">
-    <!-- 입력/난이도 -->
+    <!-- 입력/난이도/모드 -->
     <div class="card">
       <div class="row" style="justify-content:space-between;">
         <div class="col" style="flex:1">
@@ -113,6 +119,13 @@
             <option value="3" selected>3 - Hard (가변 규칙, 상승 1000/1500/2000)</option>
             <option value="4">4 - Extreme (HDG 5°, ALT 100ft·≤9500, ΔALT 1500~3000/100, SPD 5kt, FPM 500~3000/100)</option>
           </select>
+        </div>
+        <div class="col">
+          <span class="label">Instruction Mode</span>
+          <div class="seg">
+            <button id="modeA" class="active">Mode A</button>
+            <button id="modeB">Mode B</button>
+          </div>
         </div>
       </div>
       <hr style="margin:14px 0;border:none;border-top:1px solid #eee" />
@@ -159,7 +172,6 @@
         <button id="next" class="primary">Next Instruction <span class="hint">N</span></button>
       </div>
 
-      <!-- 터치로 토글 가능 -->
       <div id="instCard" class="card blur-wrap" style="margin-top:14px">
         <div class="label">Instruction (현재) <span class="hint">Space</span></div>
         <div id="textOut" class="mono blurred" style="white-space:pre-wrap;font-size:15px"></div>
@@ -172,7 +184,6 @@
         <div id="logSummary" class="log-summary note mono">총 0 / 정답 0 / 오답 0 / 오답 0%</div>
       </div>
 
-      <!-- Approach Speed Generator -->
       <div class="card" style="margin-top:14px">
         <div class="label">Approach Speed Generator <span class="ap-chip">기본 145–152 kt</span></div>
         <div class="approach-wrap">
@@ -281,7 +292,7 @@ function speak(text){
 }
 
 /* ===== Core ===== */
-var MIN_ALT=2500, MAX_ALT=9500, SPD_MIN=160, SPD_MAX=210; /* <- 제한 수정 */
+var MIN_ALT=2500, MAX_ALT=9500, SPD_MIN=160, SPD_MAX=210;
 function $(id){ return document.getElementById(id); }
 var h1=$('h1'),h2=$('h2'),h3=$('h3'),a1=$('a1'),a2=$('a2'),s1=$('s1'),s2=$('s2');
 var hdgPreview=$('hdgPreview'),altPreview=$('altPreview'),spdPreview=$('spdPreview');
@@ -295,15 +306,20 @@ var pmin1=$('pmin1'),pmin2=$('pmin2'),pmin3=$('pmin3'),pmax1=$('pmax1'),pmax2=$(
 var btnApproach=$('btnApproach'),apprVal=$('apprVal'),apprRangeNote=$('apprRangeNote');
 var fabToggle=$('fabToggle'),fabWrap=$('fabWrap');
 var fabNext=$('fabNext'),fabSay=$('fabSay'),fabGen=$('fabGen'),fabInit=$('fabInit'),fabRe=$('fabRe');
+var modeABtn=$('modeA'), modeBBtn=$('modeB');
 
-var state={difficulty:3,cur_hdg:0,cur_alt:3000,cur_spd:160,lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2]};
+var state={
+  difficulty:3,cur_hdg:0,cur_alt:3000,cur_spd:160,
+  lastText:"",lastTTS:"",activeInput:null,editSeq:false,order:[h1,h2,h3,a1,a2,s1,s2],
+  orderMode:'A'  /* A(default) or B */
+};
 var approachSeq=false, approachOrder=[];
 function clampAlt(a){ a=parseInt(a||0,10); if(a<MIN_ALT)a=MIN_ALT; if(a>MAX_ALT)a=MAX_ALT; return a; }
 function clampSpd(s){ s=parseInt(s||0,10); if(s<SPD_MIN)s=SPD_MIN; if(s>SPD_MAX)s=SPD_MAX; return s; }
 function hdgSpdInAviation(n){ n=Math.max(0,Math.min(999,parseInt(n||0,10))); var s=(''+n).padStart(3,'0'); var A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner']; return [A[parseInt(s[0],10)],A[parseInt(s[1],10)],A[parseInt(s[2],10)]]; }
 function altFpmInAviation(v){ v=Math.max(0,parseInt(v||0,10)); var A=['Zero','One','Two','Tree','Four','Fife','Six','Seven','Eight','Niner']; var t=Math.floor(v/1000), h=Math.floor((v%1000)/100); var p=[]; if(t)p.push(A[t]+' Thousand'); if(h)p.push(A[h]+' Hundred'); if(!p.length)p.push(A[0]+' Hundred'); return p.join(' '); }
 function digitsToInt(){ var s=''; for(var i=0;i<arguments.length;i++){ var x=arguments[i]; var v=(x.value||'0').replace(/\D/g,'').slice(0,1); s+=v; } return parseInt(s||'0',10); }
-function updatePreviews(){ var hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10; hdgPreview.textContent='HDG: '+(''+hdg).padStart(3,'0')+'°'; altPreview.textContent='ALT: '+alt+' ft'; spdPreview.textContent='SPD: '+spd+' kt'; }
+function updatePreviews(){ var hdg=(digitsToInt(h1,h2,h3))%360, alt=digitsToInt(a1,a2)*100, spd=digitsToInt(s1,s2)*10; hdgPreview.textContent='HDG: '+(''+hdg).padStart(3,'0')+'°'; altPreview.textContent='ALT: '+alt.toLocaleString()+' ft'; spdPreview.textContent='SPD: '+spd+' kt'; }
 function addFocusRing(elm){ var arr=state.order.concat([pmin1,pmin2,pmin3,pmax1,pmax2,pmax3]); for(var i=0;i<arr.length;i++){ if(arr[i]) arr[i].classList.remove('focus-ring'); } if(elm) elm.classList.add('focus-ring'); }
 function openKeypad(inputEl){ state.activeInput=inputEl; kpTarget.textContent=inputEl.id.toUpperCase(); backdrop.style.display='block'; sheet.classList.add('show'); addFocusRing(inputEl); }
 function closeKeypad(){ sheet.classList.remove('show'); backdrop.style.display='none'; state.activeInput=null; addFocusRing(null); state.editSeq=false; approachSeq=false; approachOrder=[]; }
@@ -320,6 +336,10 @@ headingBlock.addEventListener('click',function(){ focusSection('H'); });
 altBlock.addEventListener('click',function(){ focusSection('A'); });
 speedBlock.addEventListener('click',function(){ focusSection('S'); });
 
+/* Mode A/B 토글 */
+modeABtn.onclick=function(){ state.orderMode='A'; modeABtn.classList.add('active'); modeBBtn.classList.remove('active'); };
+modeBBtn.onclick=function(){ state.orderMode='B'; modeBBtn.classList.add('active'); modeABtn.classList.remove('active'); };
+
 /* Min/Max: 3자리 모두 입력 전까지 팝업 유지 */
 apprMinBlock.addEventListener('click',function(e){
   var t=e.target && e.target.classList && e.target.classList.contains('digit') ? e.target : pmin1;
@@ -330,6 +350,7 @@ apprMaxBlock.addEventListener('click',function(e){
   approachSeq=true; approachOrder=[pmax1,pmax2,pmax3]; openKeypad(t);
 });
 
+var backdrop=$('backdrop'),sheet=$('sheet'),kpClose=$('kpClose');
 sheet.addEventListener('click',function(e){
   var btn=e.target; while(btn && !btn.classList.contains('kp-btn')) btn=btn.parentNode;
   if(!btn || !state.activeInput) return;
@@ -358,8 +379,7 @@ $('sayAgain').addEventListener('click', function(){ if(state.lastTTS) speak(stat
 $('next').addEventListener('click', emitInstruction);
 $('btnApproach').addEventListener('click', function(){ genApproach(true); });
 
-var fabToggle=$('fabToggle'),fabWrap=$('fabWrap');
-fabToggle.addEventListener('change',function(){ fabWrap.style.display=this.checked?'flex':'none'; });
+$('fabToggle').addEventListener('change',function(){ fabWrap.style.display=this.checked?'flex':'none'; });
 $('fabNext').onclick=function(){ emitInstruction(); };
 $('fabSay').onclick=function(){ if(state.lastTTS) speak(state.lastTTS); };
 $('fabGen').onclick=function(){ genApproach(true); };
@@ -427,13 +447,12 @@ function genApproach(doTTS){
 }
 updateApprNote();
 
-/* ---- Instruction ---- */
+/* ---- Difficulty → 목표 생성 ---- */
 function getInstruction(d,cur_hdg,cur_alt,cur_spd){
-  var turnd=Math.floor(Math.random()*2)+1;
+  var turnd=Math.floor(Math.random()*2)+1; // 1:L 2:R
   var target_hdg=cur_hdg, climb_descend=Math.floor(Math.random()*2);
   var target_alt=cur_alt, target_spd=cur_spd, target_fpm=1000;
 
-  /* 한계고도 로직: floor=2500, ceiling=9500 */
   if(cur_alt<=MIN_ALT) climb_descend=1;
   if(cur_alt>=MAX_ALT) climb_descend=0;
 
@@ -460,46 +479,31 @@ function getInstruction(d,cur_hdg,cur_alt,cur_spd){
     target_fpm=(Math.floor(Math.random()*13)+9)*100;
     target_hdg=target_hdg-(target_hdg%10);
   }else{ // Extreme
-    // Heading: 5deg grid
-    var d5=(Math.floor(Math.random()*36)+2)*5; // 10°~190° 범위에서 5° 스텝
+    var d5=(Math.floor(Math.random()*36)+2)*5; // 10°~190° step
     target_hdg=((cur_hdg+(turnd===1?-d5:+d5))%360+360)%360;
-    target_hdg=target_hdg - (target_hdg%5); // snap to 5°
-    // Altitude change: 1500~3000 by 100 (결과는 100ft 단위, 최종 clamp)
+    target_hdg=target_hdg - (target_hdg%5);
     var stepList=[]; for(var s=1500;s<=3000;s+=100) stepList.push(s);
     var stepA=stepList[Math.floor(Math.random()*stepList.length)];
     target_alt=clampAlt(cur_alt+(climb_descend?+stepA:-stepA));
     target_alt = target_alt - (target_alt%100);
-    // Speed: 5 kt step within 160~210
     var spdChoices=[-10,-5,0,+5,+10];
     var dv5=spdChoices[Math.floor(Math.random()*spdChoices.length)];
     target_spd=clampSpd(cur_spd+dv5);
     target_spd = target_spd - (target_spd%5);
-    // FPM: 500~3000 by 100
     target_fpm = (Math.floor(Math.random()*26)+5)*100; // 500..3000
   }
   return [turnd,target_hdg,climb_descend,target_alt,target_spd,target_fpm];
 }
 
-/* 로그 추가 + 통계 */
+/* ---- 로그 + 통계 ---- */
 function addLogEntry(text){
-  var wrap=document.createElement('div');
-  wrap.className='log-item';
+  var wrap=document.createElement('div'); wrap.className='log-item';
   var label=document.createElement('label');
-
-  var cb=document.createElement('input');
-  cb.type='checkbox';
-  cb.title='오답이면 체크';
+  var cb=document.createElement('input'); cb.type='checkbox'; cb.title='오답이면 체크';
   cb.addEventListener('change',updateLogSummary);
-
-  var span=document.createElement('span');
-  span.className='log-text mono';
-  span.textContent=text;
-
-  label.appendChild(cb);
-  label.appendChild(span);
-  wrap.appendChild(label);
+  var span=document.createElement('span'); span.className='log-text mono'; span.textContent=text;
+  label.appendChild(cb); label.appendChild(span); wrap.appendChild(label);
   logList.prepend(wrap);
-
   updateLogSummary();
 }
 function updateLogSummary(){
@@ -510,23 +514,46 @@ function updateLogSummary(){
     if(cb && cb.checked){ wrong++; items[i].classList.add('log-wrong'); }
     else { items[i].classList.remove('log-wrong'); }
   }
-  var correct=total - wrong;
-  var per= total? Math.round(wrong*100/total) : 0;
+  var correct=total-wrong, per= total? Math.round(wrong*100/total):0;
   logSummary.textContent='총 '+total+' / 정답 '+correct+' / 오답 '+wrong+' / 오답 '+per+'%';
 }
 
+/* ---- 문장 생성(A/B) + 발화 ---- */
 function emitInstruction(){
   if(state.lastText){ addLogEntry(state.lastText); }
-  var out=getInstruction(state.difficulty,state.cur_hdg,state.cur_alt,state.cur_spd);
-  var turnd=out[0], target_hdg=out[1], climbdescend=out[2], target_alt=out[3], target_spd=out[4], target_fpm=out[5];
-  target_hdg=((target_hdg%360)+360)%360;
 
-  var text='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+' heading '+(''+target_hdg).padStart(3,'0')+', '+(climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+target_alt+' Speed '+target_spd+' Rate '+target_fpm;
-  var ha=hdgSpdInAviation(target_hdg), sa=hdgSpdInAviation(target_spd);
-  var tts='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+' heading '+ha[0]+ha[1]+ha[2]+', '+(climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+altFpmInAviation(target_alt)+', Speed '+sa[0]+sa[1]+sa[2]+', Rate '+altFpmInAviation(target_fpm);
+  var out=getInstruction(state.difficulty,state.cur_hdg,state.cur_alt,state.cur_spd);
+  var turnd=out[0], hdg=out[1], climbdescend=out[2], alt=out[3], spd=out[4], fpm=out[5];
+  hdg=((hdg%360)+360)%360;
+
+  var text, tts;
+
+  if(state.orderMode==='A'){
+    var turnWord = turnd===1?'left':'right';
+    var climbWord = climbdescend===1?'climb to ':'descend to ';
+    var spdPhrase;
+    if (spd>state.cur_spd) spdPhrase='increase speed to '+spd+' kts';
+    else if (spd<state.cur_spd) spdPhrase='decrease speed to '+spd+' kts';
+    else spdPhrase='speed '+spd+' kts';
+    var bank = Math.random()<0.5 ? 25 : 30;
+    text = 'Korean air one two three tango, '+
+           'turn '+turnWord+' heading '+(''+hdg).padStart(3,'0')+', '+
+           climbWord+alt.toLocaleString()+', '+
+           'with '+fpm.toLocaleString()+' fpm, '+
+           spdPhrase+', with '+bank+' degrees bank';
+    tts = text; // 모드 A는 문장 그대로 읽음
+  } else {
+    var ha=hdgSpdInAviation(hdg), sa=hdgSpdInAviation(spd);
+    text='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+' heading '+(''+hdg).padStart(3,'0')+
+         ', '+(climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+alt+
+         ' Speed '+spd+' Rate '+fpm;
+    tts='Korean air one two three tango, Turn '+(turnd===1?'Left':'Right')+' heading '+ha[0]+ha[1]+ha[2]+
+        ', '+(climbdescend===0?'Descend and maintain ':'Climb and Maintain ')+altFpmInAviation(alt)+
+        ', Speed '+sa[0]+sa[1]+sa[2]+', Rate '+altFpmInAviation(fpm);
+  }
 
   state.lastText=text; state.lastTTS=tts;
-  state.cur_hdg=target_hdg; state.cur_alt=target_alt; state.cur_spd=target_spd;
+  state.cur_hdg=hdg; state.cur_alt=alt; state.cur_spd=spd;
 
   textOut.textContent=text; textOut.classList.add('blurred'); blurHint.classList.remove('hidden');
   speak(tts);
