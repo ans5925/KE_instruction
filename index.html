@@ -44,7 +44,12 @@
   .blur-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#333;background:rgba(255,255,255,.6);border-radius:10px;font-size:13px}
   .hidden{display:none}
   #logList{max-height:240px;overflow:auto;margin-top:8px}
-  #logList .log-item{border-top:1px dashed #e5e5e9;padding:8px 0}
+  #logList .log-item{border-top:1px dashed #e5e5e9;padding:8px 0;display:flex;gap:10px;align-items:flex-start}
+  #logList .log-item label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+  #logList .log-item input[type="checkbox"]{width:18px;height:18px;margin-top:2px}
+  .log-text{white-space:pre-wrap}
+  .log-wrong{color:#b00020}
+  .log-summary{margin-top:8px;border-top:1px solid #eee;padding-top:8px;display:flex;gap:10px;flex-wrap:wrap}
   .control{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   select, input[type="range"]{padding:6px;border:1px solid #d0d0d8;border-radius:10px}
 
@@ -106,7 +111,7 @@
             <option value="1">1 - Easy (±1000/2000ft, SPD 유지, 180° turn, 1000/1500FPM)</option>
             <option value="2">2 - Normal (±1000/2000ft, SPD ±20kt, 180° turn, 1000/1500FPM)</option>
             <option value="3" selected>3 - Hard (가변 규칙, 상승 1000/1500/2000)</option>
-            <option value="4">4 - Extreme (HDG 5°, ALT 100ft·≤15000, ΔALT 1500~3000/100, SPD 5kt, FPM 500~3000/100)</option>
+            <option value="4">4 - Extreme (HDG 5°, ALT 100ft·≤9500, ΔALT 1500~3000/100, SPD 5kt, FPM 500~3000/100)</option>
           </select>
         </div>
       </div>
@@ -164,6 +169,7 @@
       <div class="card" style="margin-top:14px">
         <div class="label">Instruction Log</div>
         <div id="logList"></div>
+        <div id="logSummary" class="log-summary note mono">총 0 / 정답 0 / 오답 0 / 오답 0%</div>
       </div>
 
       <!-- Approach Speed Generator -->
@@ -275,13 +281,13 @@ function speak(text){
 }
 
 /* ===== Core ===== */
-var MIN_ALT=3000, MAX_ALT=15000, SPD_MIN=160, SPD_MAX=210;
+var MIN_ALT=2500, MAX_ALT=9500, SPD_MIN=160, SPD_MAX=210; /* <- 제한 수정 */
 function $(id){ return document.getElementById(id); }
 var h1=$('h1'),h2=$('h2'),h3=$('h3'),a1=$('a1'),a2=$('a2'),s1=$('s1'),s2=$('s2');
 var hdgPreview=$('hdgPreview'),altPreview=$('altPreview'),spdPreview=$('spdPreview');
 var textOut=$('textOut'),blurHint=$('blurHint'),difficultySel=$('difficulty');
 var sayAgainBtn=$('sayAgain'),nextBtn=$('next'),initBtn=$('btnInit'),reinitBtn=$('btnReinit');
-var logList=$('logList'),headingBlock=$('headingBlock'),altBlock=$('altBlock'),speedBlock=$('speedBlock');
+var logList=$('logList'),logSummary=$('logSummary'),headingBlock=$('headingBlock'),altBlock=$('altBlock'),speedBlock=$('speedBlock');
 var instCard=$('instCard');
 var backdrop=$('backdrop'),sheet=$('sheet'),kpTarget=$('kpTarget'),kpClose=$('kpClose');
 var apprMinBlock=$('apprMinBlock'),apprMaxBlock=$('apprMaxBlock');
@@ -346,17 +352,19 @@ backdrop.addEventListener('click',function(){ closeKeypad(); });
 kpClose.addEventListener('click',function(){ closeKeypad(); });
 
 /* 버튼 + FAB 이벤트 */
-initBtn.addEventListener('click', doInitialize);
-reinitBtn.addEventListener('click', doReinitialize);
-sayAgainBtn.addEventListener('click', function(){ if(state.lastTTS) speak(state.lastTTS); });
-nextBtn.addEventListener('click', emitInstruction);
-btnApproach.addEventListener('click', function(){ genApproach(true); });
+$('btnInit').addEventListener('click', doInitialize);
+$('btnReinit').addEventListener('click', doReinitialize);
+$('sayAgain').addEventListener('click', function(){ if(state.lastTTS) speak(state.lastTTS); });
+$('next').addEventListener('click', emitInstruction);
+$('btnApproach').addEventListener('click', function(){ genApproach(true); });
+
+var fabToggle=$('fabToggle'),fabWrap=$('fabWrap');
 fabToggle.addEventListener('change',function(){ fabWrap.style.display=this.checked?'flex':'none'; });
-fabNext.onclick=function(){ emitInstruction(); };
-fabSay.onclick=function(){ if(state.lastTTS) speak(state.lastTTS); };
-fabGen.onclick=function(){ genApproach(true); };
-fabInit.onclick=function(){ doInitialize(); };
-fabRe.onclick=function(){ doReinitialize(); };
+$('fabNext').onclick=function(){ emitInstruction(); };
+$('fabSay').onclick=function(){ if(state.lastTTS) speak(state.lastTTS); };
+$('fabGen').onclick=function(){ genApproach(true); };
+$('fabInit').onclick=function(){ doInitialize(); };
+$('fabRe').onclick=function(){ doReinitialize(); };
 
 /* 키보드 */
 document.addEventListener('keydown',function(e){
@@ -424,6 +432,8 @@ function getInstruction(d,cur_hdg,cur_alt,cur_spd){
   var turnd=Math.floor(Math.random()*2)+1;
   var target_hdg=cur_hdg, climb_descend=Math.floor(Math.random()*2);
   var target_alt=cur_alt, target_spd=cur_spd, target_fpm=1000;
+
+  /* 한계고도 로직: floor=2500, ceiling=9500 */
   if(cur_alt<=MIN_ALT) climb_descend=1;
   if(cur_alt>=MAX_ALT) climb_descend=0;
 
@@ -451,13 +461,14 @@ function getInstruction(d,cur_hdg,cur_alt,cur_spd){
     target_hdg=target_hdg-(target_hdg%10);
   }else{ // Extreme
     // Heading: 5deg grid
-    var d5=(Math.floor(Math.random()*36)+2)*5; // 10°~190° in 5°
+    var d5=(Math.floor(Math.random()*36)+2)*5; // 10°~190° 범위에서 5° 스텝
     target_hdg=((cur_hdg+(turnd===1?-d5:+d5))%360+360)%360;
     target_hdg=target_hdg - (target_hdg%5); // snap to 5°
-    // Altitude change: 1500~3000 by 100
+    // Altitude change: 1500~3000 by 100 (결과는 100ft 단위, 최종 clamp)
     var stepList=[]; for(var s=1500;s<=3000;s+=100) stepList.push(s);
     var stepA=stepList[Math.floor(Math.random()*stepList.length)];
     target_alt=clampAlt(cur_alt+(climb_descend?+stepA:-stepA));
+    target_alt = target_alt - (target_alt%100);
     // Speed: 5 kt step within 160~210
     var spdChoices=[-10,-5,0,+5,+10];
     var dv5=spdChoices[Math.floor(Math.random()*spdChoices.length)];
@@ -465,15 +476,47 @@ function getInstruction(d,cur_hdg,cur_alt,cur_spd){
     target_spd = target_spd - (target_spd%5);
     // FPM: 500~3000 by 100
     target_fpm = (Math.floor(Math.random()*26)+5)*100; // 500..3000
-    // Alt 100ft grid
-    target_alt = target_alt - (target_alt%100);
   }
   return [turnd,target_hdg,climb_descend,target_alt,target_spd,target_fpm];
 }
-function emitInstruction(){
-  if(state.lastText){
-    var item=document.createElement('div'); item.className='log-item mono'; item.textContent=state.lastText; logList.prepend(item);
+
+/* 로그 추가 + 통계 */
+function addLogEntry(text){
+  var wrap=document.createElement('div');
+  wrap.className='log-item';
+  var label=document.createElement('label');
+
+  var cb=document.createElement('input');
+  cb.type='checkbox';
+  cb.title='오답이면 체크';
+  cb.addEventListener('change',updateLogSummary);
+
+  var span=document.createElement('span');
+  span.className='log-text mono';
+  span.textContent=text;
+
+  label.appendChild(cb);
+  label.appendChild(span);
+  wrap.appendChild(label);
+  logList.prepend(wrap);
+
+  updateLogSummary();
+}
+function updateLogSummary(){
+  var items=logList.querySelectorAll('.log-item');
+  var total=items.length, wrong=0;
+  for(var i=0;i<items.length;i++){
+    var cb=items[i].querySelector('input[type="checkbox"]');
+    if(cb && cb.checked){ wrong++; items[i].classList.add('log-wrong'); }
+    else { items[i].classList.remove('log-wrong'); }
   }
+  var correct=total - wrong;
+  var per= total? Math.round(wrong*100/total) : 0;
+  logSummary.textContent='총 '+total+' / 정답 '+correct+' / 오답 '+wrong+' / 오답 '+per+'%';
+}
+
+function emitInstruction(){
+  if(state.lastText){ addLogEntry(state.lastText); }
   var out=getInstruction(state.difficulty,state.cur_hdg,state.cur_alt,state.cur_spd);
   var turnd=out[0], target_hdg=out[1], climbdescend=out[2], target_alt=out[3], target_spd=out[4], target_fpm=out[5];
   target_hdg=((target_hdg%360)+360)%360;
